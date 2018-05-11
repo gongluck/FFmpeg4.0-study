@@ -107,7 +107,7 @@ int file2rtmp()
 		ret = av_interleaved_write_frame(octx, &pkt);
 		av_packet_unref(&pkt);
 		if (ret < 0)
-			CheckErr(ret);
+			return CheckErr(ret);
 	}
 
 	return 0;
