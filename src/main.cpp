@@ -10,17 +10,13 @@ extern "C"
 #pragma comment(lib, "avutil.lib")
 #pragma comment(lib, "avcodec.lib")
 
+char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+#define av_err2str(errnum) \
+    av_make_error_string(av_error, AV_ERROR_MAX_STRING_SIZE, errnum)
+
 #define INFILE	"in.flv"
 #define RTMP	"rtmp://192.168.140.128/live/test"
 #define RTSP	"rtsp://184.72.239.149/vod/mp4://BigBuckBunny_175k.mov"
-
-int CheckErr(int ret)
-{
-	char buf[1024] = { 0 };
-	av_strerror(ret, buf, sizeof(buf));
-	cerr << buf << endl;
-	return ret;
-}
 
 int file2rtmp()
 {
@@ -30,17 +26,31 @@ int file2rtmp()
 	AVFormatContext* octx = nullptr;
 	const char* iurl = INFILE;
 	const char* ourl = RTMP;
+	int64_t starttime;
+
+	ret = avformat_network_init();
+	if (ret != 0)
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 
 	//打开文件，解封文件头
 	ret = avformat_open_input(&ictx, iurl, nullptr, nullptr);
 	if (ret != 0)
-		return CheckErr(ret);
-	cerr << "open file " << iurl << "success." << endl;
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
+	cerr << "open file " << iurl << " success." << endl;
 
 	//获取音视频流信息,h264 flv
 	ret = avformat_find_stream_info(ictx, nullptr);
 	if (ret != 0)
-		return CheckErr(ret);
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 
 	//打印媒体信息
 	av_dump_format(ictx, 0, iurl, 0);
@@ -48,10 +58,13 @@ int file2rtmp()
 	//////////////////////////////
 
 	//输出流
-	ret = avformat_alloc_output_context2(&octx, nullptr, "flv", ourl);
+	ret = avformat_alloc_output_context2(&octx, av_guess_format(nullptr, INFILE, nullptr), nullptr, ourl);
 	if (ret != 0)
-		CheckErr(ret);
-	cerr << "octx create success." << endl;
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
+	cout << "octx create success." << endl;
 
 	//配置输出流
 	for (int i = 0; i < ictx->nb_streams; ++i)
@@ -59,11 +72,14 @@ int file2rtmp()
 		//创建流
 		AVStream* ostream = avformat_new_stream(octx, avcodec_find_encoder(ictx->streams[i]->codecpar->codec_id));
 		if (ostream == nullptr)
-			return -1;
+			goto END;
 		//复制配置信息
 		ret = avcodec_parameters_copy(ostream->codecpar, ictx->streams[i]->codecpar);
 		if (ret != 0)
-			return CheckErr(ret);
+		{
+			cout << av_err2str(ret) << endl;
+			goto END;
+		}
 		ostream->codecpar->codec_tag = 0;//标记不需要重新编解码
 	}
 	av_dump_format(octx, 0, ourl, 1);
@@ -71,22 +87,24 @@ int file2rtmp()
 	//////////////////////////////
 
 	//推流
-	ret = avformat_network_init();
-	if (ret != 0)
-		return CheckErr(ret);
-
-	ret = avio_open(&octx->pb, ourl, AVIO_FLAG_WRITE);
+	ret = avio_open2(&octx->pb, ourl, AVIO_FLAG_WRITE, nullptr, nullptr);
 	if (ret < 0)
-		return CheckErr(ret);
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 
 	//写入头信息
 	ret = avformat_write_header(octx, nullptr);
 	if (ret < 0)
-		return CheckErr(ret);
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 
 	//推流每一帧数据
 	AVPacket pkt;
-	int64_t starttime = av_gettime();
+	starttime = av_gettime();
 	while (av_read_frame(ictx, &pkt) == 0)
 	{
 		//计算转换pts dts
@@ -108,9 +126,29 @@ int file2rtmp()
 		ret = av_interleaved_write_frame(octx, &pkt);
 		av_packet_unref(&pkt);
 		if (ret < 0)
-			return CheckErr(ret);
+		{
+			cout << av_err2str(ret) << endl;
+			goto END;
+		}
+	}
+	ret = av_write_trailer(octx);//写文件尾
+	if (ret < 0)
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
 	}
 
+END:
+	if (ictx != nullptr)
+		avformat_close_input(&ictx);
+	if (octx != nullptr)
+	{
+		avio_close(octx->pb);
+		avformat_free_context(octx);
+	}
+	ret = avformat_network_deinit();
+	if (ret != 0)
+		cout << av_err2str(ret) << endl;
 	return 0;
 }
 
@@ -122,17 +160,24 @@ int rtsp2rtmp()
 	AVFormatContext* octx = nullptr;
 	const char* iurl = RTSP;
 	const char* ourl = RTMP;
+	int64_t starttime;
 
 	//打开文件，解封文件头
 	ret = avformat_open_input(&ictx, iurl, nullptr, nullptr);
 	if (ret != 0)
-		return CheckErr(ret);
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 	cerr << "open file " << iurl << " success." << endl;
 
 	//获取音视频流信息,h264 flv
 	ret = avformat_find_stream_info(ictx, nullptr);
 	if (ret != 0)
-		return CheckErr(ret);
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 
 	//打印媒体信息
 	av_dump_format(ictx, 0, iurl, 0);
@@ -142,7 +187,10 @@ int rtsp2rtmp()
 	//输出流
 	ret = avformat_alloc_output_context2(&octx, nullptr, "flv", ourl);
 	if (ret != 0)
-		CheckErr(ret);
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 	cerr << "octx create success." << endl;
 
 	//配置输出流
@@ -155,7 +203,10 @@ int rtsp2rtmp()
 		//复制配置信息
 		ret = avcodec_parameters_copy(ostream->codecpar, ictx->streams[i]->codecpar);
 		if (ret != 0)
-			return CheckErr(ret);
+		{
+			cout << av_err2str(ret) << endl;
+			goto END;
+		}
 		ostream->codecpar->codec_tag = 0;//标记不需要重新编解码
 	}
 	av_dump_format(octx, 0, ourl, 1);
@@ -165,20 +216,29 @@ int rtsp2rtmp()
 	//推流
 	ret = avformat_network_init();
 	if (ret != 0)
-		return CheckErr(ret);
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 
 	ret = avio_open(&octx->pb, ourl, AVIO_FLAG_WRITE);
 	if (ret < 0)
-		return CheckErr(ret);
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 
 	//写入头信息
 	ret = avformat_write_header(octx, nullptr);
 	if (ret < 0)
-		return CheckErr(ret);
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
 
 	//推流每一帧数据
 	AVPacket pkt;
-	int64_t starttime = av_gettime();
+	starttime = av_gettime();
 	while (av_read_frame(ictx, &pkt) == 0)
 	{
 		//计算转换pts dts
@@ -192,16 +252,18 @@ int rtsp2rtmp()
 		ret = av_interleaved_write_frame(octx, &pkt);
 		av_packet_unref(&pkt);
 		if (ret < 0)
-			CheckErr(ret);//不用退出
+			cout << av_err2str(ret) << endl;//不用退出
 	}
 
+END:
 	return 0;
 }
 
 int main()
 {
-	//file2rtmp();
-	rtsp2rtmp();
+	while(true)
+		file2rtmp();
+	//rtsp2rtmp();
 	system("pause");
 	return 0;
 }
