@@ -120,7 +120,7 @@ int file2rtmp()
 			int64_t nowtime = av_gettime() - starttime;
 			int64_t dts = pkt.dts * av_q2d(octx->streams[pkt.stream_index]->time_base) * 1000 * 1000;
 			if(dts > nowtime)
-				av_usleep(dts- nowtime);
+				/*av_usleep(dts- nowtime)*/;
 		}
 		
 		ret = av_interleaved_write_frame(octx, &pkt);
@@ -162,6 +162,13 @@ int rtsp2rtmp()
 	const char* ourl = RTMP;
 	int64_t starttime;
 
+	ret = avformat_network_init();
+	if (ret != 0)
+	{
+		cout << av_err2str(ret) << endl;
+		goto END;
+	}
+
 	//打开文件，解封文件头
 	ret = avformat_open_input(&ictx, iurl, nullptr, nullptr);
 	if (ret != 0)
@@ -185,7 +192,7 @@ int rtsp2rtmp()
 	//////////////////////////////
 
 	//输出流
-	ret = avformat_alloc_output_context2(&octx, nullptr, "flv", ourl);
+	ret = avformat_alloc_output_context2(&octx, av_guess_format(nullptr, INFILE, nullptr), nullptr, ourl);
 	if (ret != 0)
 	{
 		cout << av_err2str(ret) << endl;
@@ -214,7 +221,6 @@ int rtsp2rtmp()
 	//////////////////////////////
 
 	//推流
-	ret = avformat_network_init();
 	if (ret != 0)
 	{
 		cout << av_err2str(ret) << endl;
@@ -256,14 +262,23 @@ int rtsp2rtmp()
 	}
 
 END:
+	if (ictx != nullptr)
+		avformat_close_input(&ictx);
+	if (octx != nullptr)
+	{
+		avio_close(octx->pb);
+		avformat_free_context(octx);
+	}
+	ret = avformat_network_deinit();
+	if (ret != 0)
+		cout << av_err2str(ret) << endl;
 	return 0;
 }
 
 int main()
 {
-	while(true)
-		file2rtmp();
-	//rtsp2rtmp();
+	//file2rtmp();
+	rtsp2rtmp();
 	system("pause");
 	return 0;
 }

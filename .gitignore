@@ -1,4 +1,3 @@
-
 .vs/FFmpeg4.0-study/v15/.suo
 *.db
 *.ipch
@@ -6,12 +5,9 @@
 *.idb
 x64/Debug/FFmpeg4.0-study.tlog/unsuccessfulbuild
 *.opendb
-bin/FFmpeg4.0-study.exe
-bin/FFmpeg4.0-study.exe
 *.ilk
 *.user
 *.log
 *.tlog
 *.obj
-bin/FFmpeg4.0-study.exe
 *.enc
