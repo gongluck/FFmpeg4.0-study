@@ -5,6 +5,8 @@ VisualStudioVersion = 15.0.27428.2043
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FFmpeg4.0-study", "FFmpeg4.0-study.vcxproj", "{6F212164-581C-42A5-BE39-A070273B4154}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "official example", "official example.vcxproj", "{C90B3DE5-76CF-4B59-9630-9F7D7D0A2A90}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{6F212164-581C-42A5-BE39-A070273B4154}.Release|x64.Build.0 = Release|x64
 		{6F212164-581C-42A5-BE39-A070273B4154}.Release|x86.ActiveCfg = Release|Win32
 		{6F212164-581C-42A5-BE39-A070273B4154}.Release|x86.Build.0 = Release|Win32
+		{C90B3DE5-76CF-4B59-9630-9F7D7D0A2A90}.Debug|x64.ActiveCfg = Debug|x64
+		{C90B3DE5-76CF-4B59-9630-9F7D7D0A2A90}.Debug|x64.Build.0 = Debug|x64
+		{C90B3DE5-76CF-4B59-9630-9F7D7D0A2A90}.Debug|x86.ActiveCfg = Debug|Win32
+		{C90B3DE5-76CF-4B59-9630-9F7D7D0A2A90}.Debug|x86.Build.0 = Debug|Win32
+		{C90B3DE5-76CF-4B59-9630-9F7D7D0A2A90}.Release|x64.ActiveCfg = Release|x64
+		{C90B3DE5-76CF-4B59-9630-9F7D7D0A2A90}.Release|x64.Build.0 = Release|x64
+		{C90B3DE5-76CF-4B59-9630-9F7D7D0A2A90}.Release|x86.ActiveCfg = Release|Win32
+		{C90B3DE5-76CF-4B59-9630-9F7D7D0A2A90}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
