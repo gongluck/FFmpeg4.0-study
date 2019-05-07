@@ -1,0 +1,250 @@
+#include <iostream>
+#include <fstream>
+
+//#define NOVIDEO
+//#define NOAUDIO
+
+#ifdef __cplusplus
+
+extern "C"
+{
+
+#endif
+
+// FFmpeg 头文件
+#include "libavformat/avformat.h"
+
+#ifdef __cplusplus
+
+}
+// C++中使用av_err2str宏
+char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+#define av_err2str(errnum) \
+    av_make_error_string(av_error, AV_ERROR_MAX_STRING_SIZE, errnum)
+
+#endif
+
+
+int main(int argc, char* argv[])
+{
+    AVFormatContext* fmt_ctx = nullptr;
+    AVCodecContext *vcodectx = nullptr, *acodectx = nullptr;
+    AVCodecParameters *vcodecpar = nullptr, *acodecpar = nullptr;
+    AVCodec *vcodec = nullptr, *acodec = nullptr;
+    AVPacket* pkt = nullptr;
+    AVFrame* frame = nullptr;
+    std::ofstream out_yuv, out_pcm;
+    const char* in = "in.flv";
+    int vindex = -1, aindex = -1;
+    int ret = 0;
+
+    out_yuv.open("out.yuv", std::ios::binary | std::ios::trunc);
+    out_pcm.open("out.pcm", std::ios::binary | std::ios::trunc);
+    if (!out_yuv.is_open() || !out_pcm.is_open())
+    {
+        std::cerr << "创建/打开输出文件失败" << std::endl;
+        goto END;
+    }
+
+    // 日志
+    av_log_set_level(AV_LOG_ERROR);
+
+    // 打开输入
+    ret = avformat_open_input(&fmt_ctx, in, nullptr, nullptr);
+    if (ret < 0)
+    {
+        std::cerr << "avformat_open_input err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+
+    // 查找流信息，对输入进行预处理
+    ret = avformat_find_stream_info(fmt_ctx, nullptr);
+    if (ret < 0)
+    {
+        std::cerr << "avformat_find_stream_info err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+
+    // 打印输入信息
+    av_dump_format(fmt_ctx, 0, fmt_ctx->url, 0);
+
+    //查找流
+    for (int i = 0; i < fmt_ctx->nb_streams; ++i)
+    {
+        if (fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+        {
+            vindex = i;
+        }   
+        else if (fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+        {
+            aindex = i;
+        }    
+    }
+    if (vindex == -1)
+    {
+        std::cerr << "找不到视频流" << std::endl;
+    }
+    if (aindex == -1)
+    {
+        std::cerr << "找不到音频流" << std::endl;
+    }
+
+    //查找解码器    
+    vcodecpar = fmt_ctx->streams[vindex]->codecpar;
+    vcodec = avcodec_find_decoder(vcodecpar->codec_id);
+    if (vcodec == nullptr)
+    {
+        std::cerr << "avcodec_find_decoder err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    acodecpar = fmt_ctx->streams[aindex]->codecpar;
+    acodec = avcodec_find_decoder(acodecpar->codec_id);
+    if (acodec == nullptr)
+    {
+        std::cerr << "avcodec_find_decoder err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+
+    //打开解码器
+    vcodectx = avcodec_alloc_context3(vcodec);
+    ret = avcodec_parameters_to_context(vcodectx, vcodecpar);// 参数拷贝
+    if (ret < 0)
+    {
+        std::cerr << "avcodec_parameters_to_context err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    ret = avcodec_open2(vcodectx, vcodec, nullptr);
+    if (ret < 0)
+    {
+        std::cerr << "avcodec_open2 err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    acodectx = avcodec_alloc_context3(acodec);
+    ret = avcodec_parameters_to_context(acodectx, acodecpar);// 参数拷贝
+    if (ret < 0)
+    {
+        std::cerr << "avcodec_parameters_to_context err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    ret = avcodec_open2(acodectx, acodec, nullptr);
+    if (ret < 0)
+    {
+        std::cerr << "avcodec_open2 err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+
+    // 创建AVPacket
+    pkt = av_packet_alloc();
+    if (pkt == nullptr)
+    {
+        std::cerr << "av_packet_alloc err ： " << std::endl;
+        goto END;
+    }
+    av_init_packet(pkt);
+
+    // 创建AVFrame
+    frame = av_frame_alloc();
+    if (frame == nullptr) 
+    {
+        std::cerr << "av_frame_alloc err ： " << std::endl;
+        goto END;
+    }
+
+    // 从输入读取数据
+    while (av_read_frame(fmt_ctx, pkt) >= 0)
+    {
+        if (pkt->stream_index == vindex)
+        {
+#ifndef NOVIDEO
+            // 解码视频帧
+            ret = avcodec_send_packet(vcodectx, pkt);
+            if (ret < 0)
+            {
+                std::cerr << "avcodec_send_packet err ： " << av_err2str(ret) << std::endl;
+                break;
+            }
+            while (ret >= 0) 
+            {
+                ret = avcodec_receive_frame(vcodectx, frame);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                {
+                    break;
+                }
+                else if (ret < 0) 
+                {
+                    std::cerr << "avcodec_receive_frame err ： " << av_err2str(ret) << std::endl;
+                    break;
+                }
+                else
+                {
+                    // 得到解码数据
+                    if (frame->format == AV_PIX_FMT_YUV420P)
+                    {
+                        out_yuv.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
+                        out_yuv.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
+                        out_yuv.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
+                    }
+                }
+            }
+#endif // NOVIDEO
+        }
+        else if (pkt->stream_index == aindex)
+        {
+#ifndef NOAUDIO
+            // 解码音频帧
+            ret = avcodec_send_packet(acodectx, pkt);
+            if (ret < 0)
+            {
+                std::cerr << "avcodec_send_packet err ： " << av_err2str(ret) << std::endl;
+                break;
+            }
+            while (ret >= 0)
+            {
+                ret = avcodec_receive_frame(acodectx, frame);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                {
+                    break;
+                }
+                else if (ret < 0)
+                {
+                    std::cerr << "avcodec_receive_frame err ： " << av_err2str(ret) << std::endl;
+                    break;
+                }
+                else
+                {   
+                    // 得到解码数据
+                    if (frame->format == AV_SAMPLE_FMT_FLTP)
+                    { 
+                        /// 参考了https://www.cnblogs.com/my_life/articles/6841859.html
+                        // 计算一个planar的有效大小，很关键！
+                        auto size = av_get_bytes_per_sample(static_cast<AVSampleFormat>(frame->format)) * frame->nb_samples;
+                        for (int i = 0; i < size; i += 4)
+                        {
+                            for (int j = 0; j < frame->channels; ++j)
+                            {
+                                out_pcm.write(reinterpret_cast<const char*>(frame->data[j] + i), 4);
+                            }
+                        }
+                    }
+                }
+            }
+#endif // NOAUDIO
+        }
+
+        // 复位data和size
+        av_packet_unref(pkt);
+    }
+
+END:
+    std::cerr << "end..." << std::endl;
+    std::cin.get();
+
+    out_yuv.close();
+    out_pcm.close();
+    av_frame_free(&frame);
+    av_packet_free(&pkt);
+    avcodec_free_context(&vcodectx);
+    avcodec_free_context(&acodectx);
+    avformat_close_input(&fmt_ctx);
+    return 0;
+}

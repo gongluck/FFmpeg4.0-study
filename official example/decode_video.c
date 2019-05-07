@@ -60,8 +60,6 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *frame, AVPacket *pkt,
         exit(1);
     }
 
-    const char* str = av_err2str(ret);
-
     while (ret >= 0) {
         ret = avcodec_receive_frame(dec_ctx, frame);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)

@@ -1,9 +1,8 @@
-.vs/FFmpeg4.0-study/v15/.suo
+.vs
 *.db
 *.ipch
 *.pdb
 *.idb
-x64/Debug/FFmpeg4.0-study.tlog/unsuccessfulbuild
 *.opendb
 *.ilk
 *.user
