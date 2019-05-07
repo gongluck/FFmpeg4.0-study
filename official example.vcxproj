@@ -20,6 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="official example\avio_reading.c" />
+    <ClCompile Include="official example\decode_video.c" />
+    <ClCompile Include="official example\encode_video.c" />
     <ClCompile Include="official example\remuxing.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -75,8 +77,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>bin</OutDir>
-    <IntDir>tmp</IntDir>
+    <OutDir>bin\</OutDir>
+    <IntDir>tmp\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

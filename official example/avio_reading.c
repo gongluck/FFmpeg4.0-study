@@ -56,7 +56,7 @@ static int read_packet(void *opaque, uint8_t *buf, int buf_size)
     return buf_size;
 }
 
-int main(int argc, char *argv[])
+int main_avio_reading(int argc, char *argv[])
 {
     AVFormatContext *fmt_ctx = NULL;
     AVIOContext *avio_ctx = NULL;
