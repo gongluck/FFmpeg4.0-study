@@ -1,8 +1,9 @@
 #include <iostream>
 #include <fstream>
 
-//#define NOVIDEO
+#define NOVIDEO
 //#define NOAUDIO
+#define AVIO
 
 #ifdef __cplusplus
 
@@ -13,6 +14,8 @@ extern "C"
 
 // FFmpeg 头文件
 #include "libavformat/avformat.h"
+#include <libavformat/avio.h>
+#include <libavutil/file.h> // av_file_map
 
 #ifdef __cplusplus
 
@@ -24,10 +27,34 @@ char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
 
 #endif
 
+// 自定义参数，传递内存buf和大小
+typedef struct __BUFER_DATA__
+{
+    uint8_t* buf;
+    size_t size;
+}Bufdata;
+
+// 自定义文件读操作
+int read_packet(void *opaque, uint8_t *buf, int buf_size)
+{
+    Bufdata* bd = static_cast<Bufdata*>(opaque);
+    buf_size = FFMIN(buf_size, bd->size);
+    if (buf_size == 0)
+    {
+        return AVERROR_EOF;
+    }
+
+    memcpy(buf, bd->buf, buf_size);
+    bd->buf += buf_size;
+    bd->size -= buf_size;
+
+    return buf_size;
+}
 
 int main(int argc, char* argv[])
 {
     AVFormatContext* fmt_ctx = nullptr;
+    AVDictionaryEntry* dic = nullptr;
     AVCodecContext *vcodectx = nullptr, *acodectx = nullptr;
     AVCodecParameters *vcodecpar = nullptr, *acodecpar = nullptr;
     AVCodec *vcodec = nullptr, *acodec = nullptr;
@@ -37,6 +64,10 @@ int main(int argc, char* argv[])
     const char* in = "in.flv";
     int vindex = -1, aindex = -1;
     int ret = 0;
+    uint8_t *buf = nullptr, *aviobuf = nullptr;
+    size_t size = 0;
+    Bufdata bd = { 0 };
+    AVIOContext* avioctx = nullptr;
 
     out_yuv.open("out.yuv", std::ios::binary | std::ios::trunc);
     out_pcm.open("out.pcm", std::ios::binary | std::ios::trunc);
@@ -47,14 +78,52 @@ int main(int argc, char* argv[])
     }
 
     // 日志
-    av_log_set_level(AV_LOG_ERROR);
+    av_log_set_level(AV_LOG_INFO);
 
     // 打开输入
+#ifdef AVIO
+    // 内存映射
+    ret = av_file_map("in.flv", &buf, &size, 0, 0);
+    if (ret < 0)
+    {
+        std::cerr << "av_file_map err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    fmt_ctx = avformat_alloc_context();
+    if (fmt_ctx == nullptr)
+    {
+        std::cerr << "avformat_alloc_context err" << std::endl;
+        goto END;
+    }
+    aviobuf = static_cast<uint8_t*>(av_malloc(1024));
+    if (aviobuf == nullptr)
+    {
+        std::cerr << "av_malloc err" << std::endl;
+        goto END;
+    }
+    bd.buf = buf;
+    bd.size = size;
+    avioctx = avio_alloc_context(aviobuf, 1024, 0, &bd, read_packet, nullptr, nullptr);    if (avioctx == nullptr)    {        std::cerr << "avio_alloc_context err" << std::endl;
+        goto END;    }    fmt_ctx->pb = avioctx;
+    ret = avformat_open_input(&fmt_ctx, nullptr, nullptr, nullptr);
+    if (ret < 0)
+    {
+        std::cerr << "avformat_open_input err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+#else
     ret = avformat_open_input(&fmt_ctx, in, nullptr, nullptr);
     if (ret < 0)
     {
         std::cerr << "avformat_open_input err ： " << av_err2str(ret) << std::endl;
         goto END;
+    }
+#endif
+
+    std::cerr << "get metadata : " << std::endl;
+    while ((dic = av_dict_get(fmt_ctx->metadata, "", dic, AV_DICT_IGNORE_SUFFIX)) != nullptr)
+    {
+        std::cerr << dic->key << " : " << dic->value << std::endl;
     }
 
     // 查找流信息，对输入进行预处理
@@ -94,14 +163,14 @@ int main(int argc, char* argv[])
     vcodec = avcodec_find_decoder(vcodecpar->codec_id);
     if (vcodec == nullptr)
     {
-        std::cerr << "avcodec_find_decoder err ： " << av_err2str(ret) << std::endl;
+        std::cerr << "avcodec_find_decoder err"  << std::endl;
         goto END;
     }
     acodecpar = fmt_ctx->streams[aindex]->codecpar;
     acodec = avcodec_find_decoder(acodecpar->codec_id);
     if (acodec == nullptr)
     {
-        std::cerr << "avcodec_find_decoder err ： " << av_err2str(ret) << std::endl;
+        std::cerr << "avcodec_find_decoder err" << std::endl;
         goto END;
     }
 
@@ -137,7 +206,7 @@ int main(int argc, char* argv[])
     pkt = av_packet_alloc();
     if (pkt == nullptr)
     {
-        std::cerr << "av_packet_alloc err ： " << std::endl;
+        std::cerr << "av_packet_alloc err" << std::endl;
         goto END;
     }
     av_init_packet(pkt);
@@ -146,7 +215,7 @@ int main(int argc, char* argv[])
     frame = av_frame_alloc();
     if (frame == nullptr) 
     {
-        std::cerr << "av_frame_alloc err ： " << std::endl;
+        std::cerr << "av_frame_alloc err" << std::endl;
         goto END;
     }
 
@@ -246,5 +315,13 @@ END:
     avcodec_free_context(&vcodectx);
     avcodec_free_context(&acodectx);
     avformat_close_input(&fmt_ctx);
+
+    // 内部缓冲区可能已经改变，并且是不等于之前的aviobuf
+    if (avioctx != nullptr) 
+    {
+        av_freep(&avioctx->buffer);
+        av_freep(&avioctx);
+    }
+    av_file_unmap(buf, size);
     return 0;
 }
