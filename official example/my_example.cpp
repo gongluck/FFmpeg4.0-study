@@ -1,9 +1,10 @@
 #include <iostream>
 #include <fstream>
 
-#define NOVIDEO
+//#define NOVIDEO
+#define SWSCALE
 //#define NOAUDIO
-#define AVIO
+//#define AVIO
 
 #ifdef __cplusplus
 
@@ -13,9 +14,12 @@ extern "C"
 #endif
 
 // FFmpeg 头文件
-#include "libavformat/avformat.h"
+#include <libavformat/avformat.h>
 #include <libavformat/avio.h>
+#include <libswscale/swscale.h>
 #include <libavutil/file.h> // av_file_map
+#include <libavutil/imgutils.h> // av_image_alloc
+
 
 #ifdef __cplusplus
 
@@ -60,18 +64,24 @@ int main(int argc, char* argv[])
     AVCodec *vcodec = nullptr, *acodec = nullptr;
     AVPacket* pkt = nullptr;
     AVFrame* frame = nullptr;
-    std::ofstream out_yuv, out_pcm;
+    std::ofstream out_yuv, out_pcm, out_bgr;
     const char* in = "in.flv";
     int vindex = -1, aindex = -1;
     int ret = 0;
+    // avio
     uint8_t *buf = nullptr, *aviobuf = nullptr;
     size_t size = 0;
     Bufdata bd = { 0 };
     AVIOContext* avioctx = nullptr;
+    // swscale
+    SwsContext* swsctx = nullptr;
+    uint8_t* pointers[4] = { 0 };
+    int linesizes[4] = { 0 };
 
     out_yuv.open("out.yuv", std::ios::binary | std::ios::trunc);
     out_pcm.open("out.pcm", std::ios::binary | std::ios::trunc);
-    if (!out_yuv.is_open() || !out_pcm.is_open())
+    out_bgr.open("out.bgr", std::ios::binary | std::ios::trunc);
+    if (!out_yuv.is_open() || !out_pcm.is_open() || !out_bgr.is_open())
     {
         std::cerr << "创建/打开输出文件失败" << std::endl;
         goto END;
@@ -118,7 +128,7 @@ int main(int argc, char* argv[])
         std::cerr << "avformat_open_input err ： " << av_err2str(ret) << std::endl;
         goto END;
     }
-#endif
+#endif // AVIO
 
     std::cerr << "get metadata : " << std::endl;
     while ((dic = av_dict_get(fmt_ctx->metadata, "", dic, AV_DICT_IGNORE_SUFFIX)) != nullptr)
@@ -219,6 +229,24 @@ int main(int argc, char* argv[])
         goto END;
     }
 
+#ifdef SWSCALE
+    // 创建转换上下文
+    swsctx = sws_getContext(vcodectx->width, vcodectx->height, AV_PIX_FMT_YUV420P, 320, 240, AV_PIX_FMT_RGB24, SWS_BILINEAR, nullptr, nullptr, nullptr);
+    if (swsctx == nullptr)
+    {
+        std::cerr << "sws_getContext err" << std::endl;
+        goto END;
+    }
+    // 分配内存空间
+    // ffmpe里很多汇编优化，它一次读取或写入的数据可能比你想象中的要多（某些对齐要求），所以ffmpeg操作的内存区域，一般都应该用av_malloc分配，这个函数通常分配的内存会比你要求的多，就是为了应付这些场景
+    ret = av_image_alloc(pointers, linesizes, 320, 240, AV_PIX_FMT_RGB24, 16);
+    if (ret < 0)
+    {
+        std::cerr << "av_image_alloc err ： " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+#endif
+
     // 从输入读取数据
     while (av_read_frame(fmt_ctx, pkt) >= 0)
     {
@@ -252,6 +280,20 @@ int main(int argc, char* argv[])
                         out_yuv.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
                         out_yuv.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
                         out_yuv.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
+#ifdef SWSCALE
+                        // 视频帧格式转换
+                        ret = sws_scale(swsctx, frame->data, frame->linesize, 0, frame->height, pointers, linesizes);
+                        if (ret <= 0)
+                        {
+                            std::cerr << "sws_scale err ： " << av_err2str(ret) << std::endl;
+                            break;
+                        }
+                        // 翻转
+                        pointers[0] += linesizes[0] * (ret - 1);
+                        linesizes[0] *= -1;
+                        out_bgr.write(reinterpret_cast<const char*>(pointers[0]), linesizes[0] * ret);
+                        
+#endif
                     }
                 }
             }
@@ -308,8 +350,15 @@ END:
     std::cerr << "end..." << std::endl;
     std::cin.get();
 
+    // 关闭文件
     out_yuv.close();
     out_pcm.close();
+    out_bgr.close();
+
+    // 释放资源
+    av_freep(&pointers[0]);
+    sws_freeContext(swsctx);
+
     av_frame_free(&frame);
     av_packet_free(&pkt);
     avcodec_free_context(&vcodectx);

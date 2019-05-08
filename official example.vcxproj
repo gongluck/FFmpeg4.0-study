@@ -25,6 +25,7 @@
     <ClCompile Include="official example\metadata.c" />
     <ClCompile Include="official example\my_example.cpp" />
     <ClCompile Include="official example\remuxing.c" />
+    <ClCompile Include="official example\scaling_video.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
