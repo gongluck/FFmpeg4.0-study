@@ -2,7 +2,7 @@
 #include <fstream>
 
 //#define NOVIDEO
-#define SWSCALE
+//#define SWSCALE
 //#define NOAUDIO
 //#define AVIO
 
@@ -168,20 +168,26 @@ int main(int argc, char* argv[])
         std::cerr << "找不到音频流" << std::endl;
     }
 
-    //查找解码器    
-    vcodecpar = fmt_ctx->streams[vindex]->codecpar;
-    vcodec = avcodec_find_decoder(vcodecpar->codec_id);
-    if (vcodec == nullptr)
+    //查找解码器
+    if (vindex != -1)
     {
-        std::cerr << "avcodec_find_decoder err"  << std::endl;
-        goto END;
+        vcodecpar = fmt_ctx->streams[vindex]->codecpar;
+        vcodec = avcodec_find_decoder(vcodecpar->codec_id);
+        if (vcodec == nullptr)
+        {
+            std::cerr << "avcodec_find_decoder err" << std::endl;
+            goto END;
+        }
     }
-    acodecpar = fmt_ctx->streams[aindex]->codecpar;
-    acodec = avcodec_find_decoder(acodecpar->codec_id);
-    if (acodec == nullptr)
+    if (aindex != -1)
     {
-        std::cerr << "avcodec_find_decoder err" << std::endl;
-        goto END;
+        acodecpar = fmt_ctx->streams[aindex]->codecpar;
+        acodec = avcodec_find_decoder(acodecpar->codec_id);
+        if (acodec == nullptr)
+        {
+            std::cerr << "avcodec_find_decoder err" << std::endl;
+            goto END;
+        }
     }
 
     //打开解码器
@@ -326,14 +332,12 @@ int main(int argc, char* argv[])
                     // 得到解码数据
                     if (frame->format == AV_SAMPLE_FMT_FLTP)
                     { 
-                        /// 参考了https://www.cnblogs.com/my_life/articles/6841859.html
-                        // 计算一个planar的有效大小，很关键！
-                        auto size = av_get_bytes_per_sample(static_cast<AVSampleFormat>(frame->format)) * frame->nb_samples;
-                        for (int i = 0; i < size; i += 4)
+                        auto size = av_get_bytes_per_sample(static_cast<AVSampleFormat>(frame->format));
+                        for (int i = 0; i < frame->nb_samples; ++i)
                         {
                             for (int j = 0; j < frame->channels; ++j)
                             {
-                                out_pcm.write(reinterpret_cast<const char*>(frame->data[j] + i), 4);
+                                out_pcm.write(reinterpret_cast<const char*>(frame->data[j] + size * i), size);
                             }
                         }
                     }

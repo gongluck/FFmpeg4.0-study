@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="official example\avio_reading.c" />
+    <ClCompile Include="official example\decode_audio.c" />
     <ClCompile Include="official example\decode_video.c" />
     <ClCompile Include="official example\encode_video.c" />
     <ClCompile Include="official example\metadata.c" />
