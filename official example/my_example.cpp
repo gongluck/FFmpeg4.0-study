@@ -1,14 +1,15 @@
 #include <iostream>
 #include <fstream>
 
-#define NOVIDEO     //不解码视频
+//#define NOVIDEO     //不解码视频
 #define NOSAVEYUV   //不保存YUV
 //#define SWSCALE     //视频帧转换,需禁用NOVIDEO
-#define NOAUDIO     //不解码音频
+//#define NOAUDIO     //不解码音频
 #define NOSAVEPCM   //不保存PCM
 //#define AVIO        //使用AVIO
-//#define ENCODE      //编码
-#define REMUX       //封装
+#define ENCODE      //编码,需禁用NOVIDEO或者NOAUDIO
+//#define REMUX       //转封装
+#define MUXING      //封装,需打开ENCODE
 
 #ifdef __cplusplus
 
@@ -90,6 +91,9 @@ int main(int argc, char* argv[])
     // REMUX
     AVFormatContext* ofmt_ctx = nullptr;
     AVStream *ovstream = nullptr, *oastream = nullptr, *streamtmp = nullptr;
+    // MUXING
+    AVFormatContext* ofmt_ctx2 = nullptr;
+    AVStream *ovstream2 = nullptr, *oastream2 = nullptr;
 
     out_yuv.open("out.yuv", std::ios::binary | std::ios::trunc);
     out_pcm.open("out.pcm", std::ios::binary | std::ios::trunc);
@@ -407,6 +411,59 @@ int main(int argc, char* argv[])
         goto END;
     }
 #endif // REMUX
+
+#ifdef MUXING
+    // 创建输出
+    ret = avformat_alloc_output_context2(&ofmt_ctx2, nullptr, nullptr, "out2.mp4");
+    if (ret < 0)
+    {
+        std::cerr << "avformat_alloc_output_context2 err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    //创建流
+    ovstream2 = avformat_new_stream(ofmt_ctx2, nullptr);
+    oastream2 = avformat_new_stream(ofmt_ctx2, nullptr);
+    if (ovstream2 == nullptr || oastream2 == nullptr)
+    {
+        std::cerr << "avformat_new_stream err" << std::endl;
+        goto END;
+    }
+    //复制配置信息
+    ret = avcodec_parameters_from_context(ovstream2->codecpar, ovcodectx);
+    if (ret < 0)
+    {
+        std::cerr << "avcodec_parameters_from_context err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    ret = avcodec_parameters_from_context(oastream2->codecpar, oacodectx);
+    if (ret < 0)
+    {
+        std::cerr << "avcodec_parameters_from_context err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    av_dump_format(ofmt_ctx2, 0, ofmt_ctx2->url, 1);
+    // 标记不需要重新编解码
+    ovstream2->codecpar->codec_tag = 0;
+    oastream2->codecpar->codec_tag = 0;
+    // 打开io
+    if (!(ofmt_ctx2->flags & AVFMT_NOFILE))
+    {
+        ret = avio_open(&ofmt_ctx2->pb, "out2.mp4", AVIO_FLAG_WRITE);
+        if (ret < 0)
+        {
+            std::cerr << "avio_open err : " << av_err2str(ret) << std::endl;
+            goto END;
+        }
+    }
+    // 写文件头
+    ret = avformat_write_header(ofmt_ctx2, nullptr);
+    if (ret < 0)
+    {
+        std::cerr << "avformat_write_header err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+#endif // MUXING
+
     // 从输入读取数据
     while (av_read_frame(fmt_ctx, pkt) >= 0)
     {
@@ -479,6 +536,18 @@ int main(int argc, char* argv[])
                             {
                                 // 得到编码数据
                                 out_h264.write(reinterpret_cast<const char*>(opkt->data), opkt->size);
+#ifdef MUXING
+                                opkt->pts = av_rescale_q_rnd(opkt->pts, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+                                opkt->dts = av_rescale_q_rnd(opkt->dts, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+                                opkt->duration = av_rescale_q(opkt->duration, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base);
+                                opkt->pos = -1;
+                                opkt->stream_index = vindex;
+                                ret = av_interleaved_write_frame(ofmt_ctx2, opkt);
+                                if (ret < 0)
+                                {
+                                    std::cerr << "av_interleaved_write_frame err ： " << av_err2str(ret) << std::endl;
+                                }
+#endif // MUXING
                                 av_packet_unref(opkt);
                             }
                         }
@@ -548,6 +617,18 @@ int main(int argc, char* argv[])
                             {
                                 // 得到编码数据
                                 out_mp3.write(reinterpret_cast<const char*>(opkt->data), opkt->size);
+#ifdef MUXING
+                                opkt->pts = av_rescale_q_rnd(opkt->pts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+                                opkt->dts = av_rescale_q_rnd(opkt->dts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+                                opkt->duration = av_rescale_q(opkt->duration, fmt_ctx->streams[aindex]->time_base, oastream2->time_base);
+                                opkt->pos = -1;
+                                opkt->stream_index = aindex;
+                                ret = av_interleaved_write_frame(ofmt_ctx2, opkt);
+                                if (ret < 0)
+                                {
+                                    std::cerr << "av_interleaved_write_frame err ： " << av_err2str(ret) << std::endl;
+                                }
+#endif // MUXING
                                 av_packet_unref(opkt);
                             }
                         }
@@ -582,6 +663,7 @@ int main(int argc, char* argv[])
             }
         }
 #endif // REMUX
+
         // 复位data和size
         av_packet_unref(pkt);
     }
@@ -598,6 +680,15 @@ END:
         std::cerr << "av_write_trailer err ： " << av_err2str(ret) << std::endl;
     }
 #endif // REMUX
+
+#ifdef MUXING
+    // 写文件尾
+    ret = av_write_trailer(ofmt_ctx2);
+    if (ret < 0)
+    {
+        std::cerr << "av_write_trailer err ： " << av_err2str(ret) << std::endl;
+    }
+#endif // MUXING
 
     // 关闭文件
     out_yuv.close();
@@ -627,6 +718,12 @@ END:
     }   
     avformat_free_context(ofmt_ctx);
     ofmt_ctx = nullptr;
+    if (ofmt_ctx2 != nullptr && !(ofmt_ctx2->oformat->flags & AVFMT_NOFILE))
+    {
+        avio_closep(&ofmt_ctx2->pb);
+    }
+    avformat_free_context(ofmt_ctx2);
+    ofmt_ctx2 = nullptr;
 
     // 内部缓冲区可能已经改变，并且是不等于之前的aviobuf
     if (avioctx != nullptr)
