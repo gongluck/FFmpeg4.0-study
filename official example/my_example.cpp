@@ -2,13 +2,13 @@
 #include <fstream>
 
 //#define NOVIDEO     //不解码视频
-#define NOSAVEYUV   //不保存YUV
-//#define SWSCALE     //视频帧转换,需禁用NOVIDEO
+//#define NOSAVEYUV   //不保存YUV
+#define SWSCALE     //视频帧转换,需禁用NOVIDEO
 //#define NOAUDIO     //不解码音频
-#define NOSAVEPCM   //不保存PCM
-//#define AVIO        //使用AVIO
+//#define NOSAVEPCM   //不保存PCM
+#define AVIO        //使用AVIO
 #define ENCODE      //编码,需禁用NOVIDEO或者NOAUDIO
-//#define REMUX       //转封装
+#define REMUX       //转封装
 #define MUXING      //封装,需打开ENCODE
 
 #ifdef __cplusplus
@@ -112,7 +112,7 @@ int main(int argc, char* argv[])
     // 打开输入
 #ifdef AVIO
     // 内存映射
-    ret = av_file_map("in.flv", &buf, &size, 0, nullptr);
+    ret = av_file_map("in.mkv", &buf, &size, 0, nullptr);
     if (ret < 0)
     {
         std::cerr << "av_file_map err ： " << av_err2str(ret) << std::endl;
@@ -171,11 +171,11 @@ int main(int argc, char* argv[])
     {
         if (fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
         {
-            vindex = i;
+            vindex = vindex==-1 ? i : vindex;
         }
         else if (fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
         {
-            aindex = i;
+            aindex = aindex == -1 ? i : aindex;
         }
     }
     if (vindex == -1)
@@ -288,7 +288,7 @@ int main(int argc, char* argv[])
         goto END;
     }
     // 设置参数
-    ovcodectx->bit_rate = vcodectx->bit_rate;
+    ovcodectx->bit_rate = vcodectx->bit_rate==0 ? 1000000 : vcodectx->bit_rate;
     ovcodectx->width = vcodectx->width;
     ovcodectx->height = vcodectx->height;
     ovcodectx->time_base = { 1, 25 };
@@ -541,7 +541,7 @@ int main(int argc, char* argv[])
                                 opkt->dts = av_rescale_q_rnd(opkt->dts, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
                                 opkt->duration = av_rescale_q(opkt->duration, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base);
                                 opkt->pos = -1;
-                                opkt->stream_index = vindex;
+                                opkt->stream_index = 0;
                                 ret = av_interleaved_write_frame(ofmt_ctx2, opkt);
                                 if (ret < 0)
                                 {
@@ -622,7 +622,7 @@ int main(int argc, char* argv[])
                                 opkt->dts = av_rescale_q_rnd(opkt->dts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
                                 opkt->duration = av_rescale_q(opkt->duration, fmt_ctx->streams[aindex]->time_base, oastream2->time_base);
                                 opkt->pos = -1;
-                                opkt->stream_index = aindex;
+                                opkt->stream_index = 1;
                                 ret = av_interleaved_write_frame(ofmt_ctx2, opkt);
                                 if (ret < 0)
                                 {
@@ -644,10 +644,12 @@ int main(int argc, char* argv[])
         if (pkt->stream_index == vindex)
         {
             streamtmp = ovstream;
+            pkt->stream_index = 0;
         }
         else if (pkt->stream_index == aindex)
         {
             streamtmp = oastream;
+            pkt->stream_index = 1;
         }
 
         if (streamtmp != nullptr)
@@ -659,7 +661,7 @@ int main(int argc, char* argv[])
             ret = av_interleaved_write_frame(ofmt_ctx, pkt);
             if (ret < 0)
             {
-                std::cerr << "av_interleaved_write_frame err ： " << av_err2str(ret) << std::endl;
+                std::cerr << "REMUX av_interleaved_write_frame err ： " << av_err2str(ret) << std::endl;
             }
         }
 #endif // REMUX
