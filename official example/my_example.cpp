@@ -386,10 +386,10 @@ int main(int argc, char* argv[])
         goto END;
     }
     av_dump_format(ofmt_ctx, 0, ofmt_ctx->url, 1);
-
+    // 标记不需要重新编解码
     ovstream->codecpar->codec_tag = 0;
     oastream->codecpar->codec_tag = 0;
-
+    // 打开io
     if (!(ofmt_ctx->flags & AVFMT_NOFILE)) 
     {
         ret = avio_open(&ofmt_ctx->pb, "out.mp4", AVIO_FLAG_WRITE);
@@ -620,6 +620,7 @@ END:
     avcodec_free_context(&ovcodectx);
     avcodec_free_context(&oacodectx);
 
+    // 关闭io
     if (ofmt_ctx != nullptr && !(ofmt_ctx->oformat->flags & AVFMT_NOFILE))
     {
         avio_closep(&ofmt_ctx->pb);
