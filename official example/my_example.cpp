@@ -1,13 +1,14 @@
 #include <iostream>
 #include <fstream>
 
-//#define NOVIDEO
-#define NOSAVEYUV
-//#define SWSCALE
-//#define NOAUDIO
-#define NOSAVEPCM
-//#define AVIO
-#define ENCODE
+#define NOVIDEO     //不解码视频
+#define NOSAVEYUV   //不保存YUV
+//#define SWSCALE     //视频帧转换,需禁用NOVIDEO
+#define NOAUDIO     //不解码音频
+#define NOSAVEPCM   //不保存PCM
+//#define AVIO        //使用AVIO
+//#define ENCODE      //编码
+#define REMUX       //封装
 
 #ifdef __cplusplus
 
@@ -16,10 +17,10 @@ extern "C"
 
 #endif
 
-    // FFmpeg 头文件
+// FFmpeg 头文件
 #include <libavformat/avformat.h>
 #include <libavformat/avio.h>
-#include <libswscale/swscale.h>
+#include <libswscale/swscale.h> // sws_cale
 #include <libavutil/file.h> // av_file_map
 #include <libavutil/imgutils.h> // av_image_alloc
 #include <libavutil/opt.h> // av_opt_set
@@ -86,6 +87,9 @@ int main(int argc, char* argv[])
     AVCodec *ovcodec = nullptr, *oacodec = nullptr;
     AVDictionary* param = nullptr;
     AVPacket* opkt = nullptr;
+    // REMUX
+    AVFormatContext* ofmt_ctx = nullptr;
+    AVStream *ovstream = nullptr, *oastream = nullptr, *streamtmp = nullptr;
 
     out_yuv.open("out.yuv", std::ios::binary | std::ios::trunc);
     out_pcm.open("out.pcm", std::ios::binary | std::ios::trunc);
@@ -352,6 +356,57 @@ int main(int argc, char* argv[])
     av_init_packet(opkt);
 #endif // ENCODE
 
+#ifdef REMUX
+    // 创建输出
+    ret = avformat_alloc_output_context2(&ofmt_ctx, nullptr, nullptr, "out.mp4");
+    if (ret < 0)
+    {
+        std::cerr << "avformat_alloc_output_context2 err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    //创建流
+    ovstream = avformat_new_stream(ofmt_ctx, nullptr);
+    oastream = avformat_new_stream(ofmt_ctx, nullptr);
+    if (ovstream == nullptr || oastream == nullptr)
+    {
+        std::cerr << "avformat_new_stream err" << std::endl;
+        goto END;
+    }
+    //复制配置信息
+    ret = avcodec_parameters_from_context(ovstream->codecpar, vcodectx);
+    if (ret < 0)
+    {
+        std::cerr << "avcodec_parameters_from_context err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    ret = avcodec_parameters_from_context(oastream->codecpar, acodectx);
+    if (ret < 0)
+    {
+        std::cerr << "avcodec_parameters_from_context err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    av_dump_format(ofmt_ctx, 0, ofmt_ctx->url, 1);
+
+    ovstream->codecpar->codec_tag = 0;
+    oastream->codecpar->codec_tag = 0;
+
+    if (!(ofmt_ctx->flags & AVFMT_NOFILE)) 
+    {
+        ret = avio_open(&ofmt_ctx->pb, "out.mp4", AVIO_FLAG_WRITE);
+        if (ret < 0) 
+        {
+            std::cerr << "avio_open err : " << av_err2str(ret) << std::endl;
+            goto END;
+        }
+    }
+    // 写文件头
+    ret = avformat_write_header(ofmt_ctx, nullptr);
+    if (ret < 0)
+    {
+        std::cerr << "avformat_write_header err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+#endif // REMUX
     // 从输入读取数据
     while (av_read_frame(fmt_ctx, pkt) >= 0)
     {
@@ -366,7 +421,7 @@ int main(int argc, char* argv[])
                 break;
             }
             while (ret >= 0)
-            {
+            {  
                 ret = avcodec_receive_frame(vcodectx, frame);
                 if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                 {
@@ -503,6 +558,30 @@ int main(int argc, char* argv[])
 #endif // NOAUDIO
         }
 
+#ifdef REMUX
+        streamtmp = nullptr;
+        if (pkt->stream_index == vindex)
+        {
+            streamtmp = ovstream;
+        }
+        else if (pkt->stream_index == aindex)
+        {
+            streamtmp = oastream;
+        }
+
+        if (streamtmp != nullptr)
+        {
+            pkt->pts = av_rescale_q_rnd(pkt->pts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+            pkt->dts = av_rescale_q_rnd(pkt->dts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+            pkt->duration = av_rescale_q(pkt->duration, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base);
+            pkt->pos = -1;
+            ret = av_interleaved_write_frame(ofmt_ctx, pkt);
+            if (ret < 0)
+            {
+                std::cerr << "av_interleaved_write_frame err ： " << av_err2str(ret) << std::endl;
+            }
+        }
+#endif // REMUX
         // 复位data和size
         av_packet_unref(pkt);
     }
@@ -510,6 +589,15 @@ int main(int argc, char* argv[])
 END:
     std::cerr << "end..." << std::endl;
     std::cin.get();
+
+#ifdef REMUX
+    // 写文件尾
+    ret = av_write_trailer(ofmt_ctx);
+    if (ret < 0)
+    {
+        std::cerr << "av_write_trailer err ： " << av_err2str(ret) << std::endl;
+    }
+#endif // REMUX
 
     // 关闭文件
     out_yuv.close();
@@ -531,6 +619,13 @@ END:
     av_packet_free(&opkt);
     avcodec_free_context(&ovcodectx);
     avcodec_free_context(&oacodectx);
+
+    if (ofmt_ctx != nullptr && !(ofmt_ctx->oformat->flags & AVFMT_NOFILE))
+    {
+        avio_closep(&ofmt_ctx->pb);
+    }   
+    avformat_free_context(ofmt_ctx);
+    ofmt_ctx = nullptr;
 
     // 内部缓冲区可能已经改变，并且是不等于之前的aviobuf
     if (avioctx != nullptr)

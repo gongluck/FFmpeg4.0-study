@@ -137,7 +137,7 @@ int main_remuxing(int argc, char **argv)
         goto end;
     }
  
-    int64_t targetFrame = av_rescale_q(10 * AV_TIME_BASE, AV_TIME_BASE_Q, ifmt_ctx->streams[0]->time_base);
+    int64_t targetFrame = av_rescale_q(0 * AV_TIME_BASE, AV_TIME_BASE_Q, ifmt_ctx->streams[0]->time_base);
     ret = av_seek_frame(ifmt_ctx, 0, targetFrame, AVSEEK_FLAG_BACKWARD);
 
     while (1) {
@@ -158,8 +158,8 @@ int main_remuxing(int argc, char **argv)
         out_stream = ofmt_ctx->streams[pkt.stream_index];
         log_packet(ifmt_ctx, &pkt, "in");
 
-        if (av_compare_ts(pkt.pts, in_stream->time_base, 20 * AV_TIME_BASE, AV_TIME_BASE_Q) >= 0)
-            break;
+       /*if (av_compare_ts(pkt.pts, in_stream->time_base, 20 * AV_TIME_BASE, AV_TIME_BASE_Q) >= 0)
+            break;*/
 
         /* copy packet */
         pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
