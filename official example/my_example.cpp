@@ -6,7 +6,7 @@
 #define SWSCALE     //视频帧转换,需禁用NOVIDEO
 //#define NOAUDIO     //不解码音频
 //#define NOSAVEPCM   //不保存PCM
-#define AVIO        //使用AVIO
+//#define AVIO        //使用AVIO
 #define ENCODE      //编码,需禁用NOVIDEO或者NOAUDIO
 #define REMUX       //转封装
 #define MUXING      //封装,需打开ENCODE
@@ -288,7 +288,7 @@ int main(int argc, char* argv[])
         goto END;
     }
     // 设置参数
-    ovcodectx->bit_rate = vcodectx->bit_rate==0 ? 1000000 : vcodectx->bit_rate;
+    ovcodectx->bit_rate = vcodectx->bit_rate==0 ? 850000 : vcodectx->bit_rate;
     ovcodectx->width = vcodectx->width;
     ovcodectx->height = vcodectx->height;
     ovcodectx->time_base = { 1, 25 };
@@ -297,7 +297,7 @@ int main(int argc, char* argv[])
     ovcodectx->max_b_frames = vcodectx->max_b_frames;
     ovcodectx->pix_fmt = vcodectx->pix_fmt;
     // --preset的参数主要调节编码速度和质量的平衡，有ultrafast、superfast、veryfast、faster、fast、medium、slow、slower、veryslow、placebo这10个选项，从快到慢。
-    ret = av_dict_set(&param, "preset", "ultrafast", 0);
+    ret = av_dict_set(&param, "preset", "medium", 0);
     if (ret < 0)
     {
         std::cerr << "av_opt_set err ： " << av_err2str(ret) << std::endl;
