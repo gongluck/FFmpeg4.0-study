@@ -693,20 +693,26 @@ END:
     std::cin.get();
 
 #ifdef REMUX
-    // 写文件尾
-    ret = av_write_trailer(ofmt_ctx);
-    if (ret < 0)
+    if (ofmt_ctx != nullptr)
     {
-        std::cerr << "av_write_trailer err ： " << av_err2str(ret) << std::endl;
+        // 写文件尾
+        ret = av_write_trailer(ofmt_ctx);
+        if (ret < 0)
+        {
+            std::cerr << "av_write_trailer err ： " << av_err2str(ret) << std::endl;
+        }
     }
 #endif // REMUX
 
 #ifdef MUXING
-    // 写文件尾
-    ret = av_write_trailer(ofmt_ctx2);
-    if (ret < 0)
+    if (ofmt_ctx2 != nullptr)
     {
-        std::cerr << "av_write_trailer err ： " << av_err2str(ret) << std::endl;
+        // 写文件尾
+        ret = av_write_trailer(ofmt_ctx2);
+        if (ret < 0)
+        {
+            std::cerr << "av_write_trailer err ： " << av_err2str(ret) << std::endl;
+        }
     }
 #endif // MUXING
 
