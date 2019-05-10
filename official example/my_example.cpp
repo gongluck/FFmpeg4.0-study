@@ -70,6 +70,9 @@ int main(int argc, char* argv[])
     AVCodec *vcodec = nullptr, *acodec = nullptr;
     AVPacket* pkt = nullptr;
     AVFrame* frame = nullptr;
+    uint8_t* pt[4] = { 0 };
+    int lz[4] = { 0 };
+    int s = 0;
     std::ofstream out_yuv, out_pcm, out_bgr, out_h264, out_mp3;
     const char* in = "in.flv";
     int vindex = -1, aindex = -1;
@@ -464,6 +467,16 @@ int main(int argc, char* argv[])
     }
 #endif // MUXING
 
+    // 申请保存解码帧的内存
+    ret = av_image_alloc(pt, lz, vcodectx->width, vcodectx->height, vcodectx->pix_fmt, 1);
+    if (ret < 0)
+    {
+        std::cerr << "av_image_alloc err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    // 记录内存大小
+    s = ret; 
+
     // 从输入读取数据
     while (av_read_frame(fmt_ctx, pkt) >= 0)
     {
@@ -495,9 +508,14 @@ int main(int argc, char* argv[])
                     if (frame->format == AV_PIX_FMT_YUV420P)
                     {
 #ifndef NOSAVEYUV
-                        out_yuv.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
-                        out_yuv.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
-                        out_yuv.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
+                        //out_yuv.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
+                        //out_yuv.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
+                        //out_yuv.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
+                        // 这种方式可以自动去除画面右边多余数据
+                        av_image_copy(pt, lz, 
+                            (const uint8_t* *)frame->data, frame->linesize, 
+                            static_cast<AVPixelFormat>(vcodectx->pix_fmt), frame->width, frame->height);
+                        out_yuv.write(reinterpret_cast<const char*>(pt[0]), s);
 #endif // NOSAVEYUV
 #ifdef SWSCALE
                         // 视频帧格式转换
