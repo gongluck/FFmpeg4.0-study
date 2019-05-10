@@ -636,8 +636,8 @@ int main(int argc, char* argv[])
                                 // 得到编码数据
                                 out_mp3.write(reinterpret_cast<const char*>(opkt->data), opkt->size);
 #ifdef MUXING
-                                opkt->pts = av_rescale_q_rnd(opkt->pts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-                                opkt->dts = av_rescale_q_rnd(opkt->dts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+                                opkt->pts = av_rescale_q_rnd(opkt->pts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+                                opkt->dts = av_rescale_q_rnd(opkt->dts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
                                 opkt->duration = av_rescale_q(opkt->duration, fmt_ctx->streams[aindex]->time_base, oastream2->time_base);
                                 opkt->pos = -1;
                                 opkt->stream_index = 1;
@@ -672,8 +672,8 @@ int main(int argc, char* argv[])
 
         if (streamtmp != nullptr)
         {
-            pkt->pts = av_rescale_q_rnd(pkt->pts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-            pkt->dts = av_rescale_q_rnd(pkt->dts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+            pkt->pts = av_rescale_q_rnd(pkt->pts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+            pkt->dts = av_rescale_q_rnd(pkt->dts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
             pkt->duration = av_rescale_q(pkt->duration, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base);
             pkt->pos = -1;
             ret = av_interleaved_write_frame(ofmt_ctx, pkt);
@@ -719,6 +719,7 @@ END:
 
     // 释放资源
     av_freep(&pointers[0]);
+    av_freep(&pt[0]);
     sws_freeContext(swsctx);
 
     av_frame_free(&frame);
