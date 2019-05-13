@@ -66,65 +66,82 @@ static int decode_packet(int *got_frame, int cached)
     int ret = 0;
     int decoded = pkt.size;
 
-    *got_frame = 0;
-
     if (pkt.stream_index == video_stream_idx) {
         /* decode video frame */
-        ret = avcodec_decode_video2(video_dec_ctx, frame, got_frame, &pkt);
+        ret = avcodec_send_packet(video_dec_ctx, &pkt);
         if (ret < 0) {
-            fprintf(stderr, "Error decoding video frame (%s)\n", av_err2str(ret));
+            fprintf(stderr, "Error sending a packet for decoding\n");
             return ret;
         }
 
-        if (*got_frame) {
+        while (ret >= 0) {
+            ret = avcodec_receive_frame(video_dec_ctx, frame);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                return 0;
+            else if (ret < 0) {
+                fprintf(stderr, "Error during decoding\n");
+                return ret;
+            }
 
             if (frame->width != width || frame->height != height ||
                 frame->format != pix_fmt) {
                 /* To handle this change, one could call av_image_alloc again and
                  * decode the following frames into another rawvideo file. */
                 fprintf(stderr, "Error: Width, height and pixel format have to be "
-                        "constant in a rawvideo file, but the width, height or "
-                        "pixel format of the input video changed:\n"
-                        "old: width = %d, height = %d, format = %s\n"
-                        "new: width = %d, height = %d, format = %s\n",
-                        width, height, av_get_pix_fmt_name(pix_fmt),
-                        frame->width, frame->height,
-                        av_get_pix_fmt_name(frame->format));
+                    "constant in a rawvideo file, but the width, height or "
+                    "pixel format of the input video changed:\n"
+                    "old: width = %d, height = %d, format = %s\n"
+                    "new: width = %d, height = %d, format = %s\n",
+                    width, height, av_get_pix_fmt_name(pix_fmt),
+                    frame->width, frame->height,
+                    av_get_pix_fmt_name(frame->format));
                 return -1;
             }
 
             printf("video_frame%s n:%d coded_n:%d\n",
-                   cached ? "(cached)" : "",
-                   video_frame_count++, frame->coded_picture_number);
+                cached ? "(cached)" : "",
+                video_frame_count++, frame->coded_picture_number);
 
             /* copy decoded frame to destination buffer:
              * this is required since rawvideo expects non aligned data */
             av_image_copy(video_dst_data, video_dst_linesize,
-                          (const uint8_t **)(frame->data), frame->linesize,
-                          pix_fmt, width, height);
+                (const uint8_t * *)(frame->data), frame->linesize,
+                pix_fmt, width, height);
 
             /* write to rawvideo file */
             fwrite(video_dst_data[0], 1, video_dst_bufsize, video_dst_file);
         }
-    } else if (pkt.stream_index == audio_stream_idx) {
+    }
+    else if (pkt.stream_index == audio_stream_idx) {
         /* decode audio frame */
-        ret = avcodec_decode_audio4(audio_dec_ctx, frame, got_frame, &pkt);
+        /* send the packet with the compressed data to the decoder */
+        ret = avcodec_send_packet(audio_dec_ctx, &pkt);
         if (ret < 0) {
-            fprintf(stderr, "Error decoding audio frame (%s)\n", av_err2str(ret));
+            fprintf(stderr, "Error submitting the packet to the decoder\n");
             return ret;
         }
-        /* Some audio decoders decode only part of the packet, and have to be
-         * called again with the remainder of the packet data.
-         * Sample: fate-suite/lossless-audio/luckynight-partial.shn
-         * Also, some decoders might over-read the packet. */
-        decoded = FFMIN(ret, pkt.size);
 
-        if (*got_frame) {
+        /* read all the output frames (in general there may be any number of them */
+        while (ret >= 0) {
+            ret = avcodec_receive_frame(audio_dec_ctx, frame);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                return 0;
+            else if (ret < 0) {
+                fprintf(stderr, "Error during decoding\n");
+                return ret;
+            }
+
+            /* Some audio decoders decode only part of the packet, and have to be
+            * called again with the remainder of the packet data.
+            * Sample: fate-suite/lossless-audio/luckynight-partial.shn
+            * Also, some decoders might over-read the packet. */
+            decoded = FFMIN(ret, pkt.size);
+
             size_t unpadded_linesize = frame->nb_samples * av_get_bytes_per_sample(frame->format);
             printf("audio_frame%s n:%d nb_samples:%d pts:%s\n",
-                   cached ? "(cached)" : "",
-                   audio_frame_count++, frame->nb_samples,
-                   av_ts2timestr(frame->pts, &audio_dec_ctx->time_base));
+                cached ? "(cached)" : "",
+                audio_frame_count++, frame->nb_samples,
+                av_ts2timestr(frame->pts, &audio_dec_ctx->time_base));
 
             /* Write the raw audio data samples of the first plane. This works
              * fine for packed formats (e.g. AV_SAMPLE_FMT_S16). However,
@@ -136,11 +153,12 @@ static int decode_packet(int *got_frame, int cached)
              * to packed data. */
             fwrite(frame->extended_data[0], 1, unpadded_linesize, audio_dst_file);
         }
+        
     }
 
     /* If we use frame reference counting, we own the data and need
      * to de-reference it when we don't use it anymore */
-    if (*got_frame && refcount)
+    if (refcount)
         av_frame_unref(frame);
 
     return decoded;
@@ -228,7 +246,7 @@ static int get_format_from_sample_fmt(const char **fmt,
     return -1;
 }
 
-int main (int argc, char **argv)
+int main_demuxing_decoding(int argc, char **argv)
 {
     int ret = 0, got_frame;
 
@@ -325,23 +343,16 @@ int main (int argc, char **argv)
 
     /* read frames from the file */
     while (av_read_frame(fmt_ctx, &pkt) >= 0) {
-        AVPacket orig_pkt = pkt;
-        do {
-            ret = decode_packet(&got_frame, 0);
-            if (ret < 0)
-                break;
-            pkt.data += ret;
-            pkt.size -= ret;
-        } while (pkt.size > 0);
-        av_packet_unref(&orig_pkt);
+        ret = decode_packet(&got_frame, 0);
+        if (ret < 0)
+            break;
+        av_packet_unref(&pkt);
     }
 
     /* flush cached frames */
     pkt.data = NULL;
     pkt.size = 0;
-    do {
-        decode_packet(&got_frame, 1);
-    } while (got_frame);
+    decode_packet(&got_frame, 1);
 
     printf("Demuxing succeeded.\n");
 
