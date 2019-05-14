@@ -31,6 +31,7 @@
     <ClCompile Include="official example\muxing.c" />
     <ClCompile Include="official example\my_example.cpp" />
     <ClCompile Include="official example\remuxing.c" />
+    <ClCompile Include="official example\resampling_audio.c" />
     <ClCompile Include="official example\scaling_video.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

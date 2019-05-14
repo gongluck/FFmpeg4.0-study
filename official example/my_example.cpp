@@ -6,6 +6,7 @@
 #define SWSCALE     //视频帧转换,需禁用NOVIDEO
 //#define NOAUDIO     //不解码音频
 //#define NOSAVEPCM   //不保存PCM
+#define RESAMPLE    //音频重采样,需禁用NOAUDIO    
 //#define AVIO        //使用AVIO
 #define ENCODE      //编码,需禁用NOVIDEO或者NOAUDIO
 #define REMUX       //转封装
@@ -22,6 +23,7 @@ extern "C"
 #include <libavformat/avformat.h>
 #include <libavformat/avio.h>
 #include <libswscale/swscale.h> // sws_cale
+#include <libswresample/swresample.h> // swr_alloc_set_opts
 #include <libavutil/file.h> // av_file_map
 #include <libavutil/imgutils.h> // av_image_alloc
 #include <libavutil/opt.h> // av_opt_set
@@ -73,7 +75,7 @@ int main(int argc, char* argv[])
     uint8_t* pt[4] = { 0 };
     int lz[4] = { 0 };
     int s = 0;
-    std::ofstream out_yuv, out_pcm, out_bgr, out_h264, out_mp3;
+    std::ofstream out_yuv, out_pcm, out_bgr, out_pcm2, out_h264, out_mp3;
     const char* in = "in.flv";
     int vindex = -1, aindex = -1;
     int ret = 0;
@@ -86,6 +88,10 @@ int main(int argc, char* argv[])
     SwsContext* swsctx = nullptr;
     uint8_t* pointers[4] = { 0 };
     int linesizes[4] = { 0 };
+    // resample
+    SwrContext* swrctx = nullptr;
+    int samplessize = 0;
+    uint8_t * sambuf = nullptr;
     // ENCODE
     AVCodecContext *ovcodectx = nullptr, *oacodectx = nullptr;
     AVCodec *ovcodec = nullptr, *oacodec = nullptr;
@@ -101,9 +107,10 @@ int main(int argc, char* argv[])
     out_yuv.open("out.yuv", std::ios::binary | std::ios::trunc);
     out_pcm.open("out.pcm", std::ios::binary | std::ios::trunc);
     out_bgr.open("out.bgr", std::ios::binary | std::ios::trunc);
+    out_pcm2.open("out2.pcm", std::ios::binary | std::ios::trunc);
     out_h264.open("out.h264", std::ios::binary | std::ios::trunc);
     out_mp3.open("out.mp3", std::ios::binary | std::ios::trunc);
-    if (!out_yuv.is_open() || !out_pcm.is_open() || !out_bgr.is_open() || !out_h264.is_open() || !out_mp3.is_open())
+    if (!out_yuv.is_open() || !out_pcm.is_open() || !out_bgr.is_open() || !out_pcm2.is_open() || !out_h264.is_open() || !out_mp3.is_open())
     {
         std::cerr << "创建/打开输出文件失败" << std::endl;
         goto END;
@@ -274,6 +281,38 @@ int main(int argc, char* argv[])
         goto END;
     }
 #endif // SWSCALE
+
+#ifdef RESAMPLE
+    // 创建转换上下文
+    swrctx = swr_alloc_set_opts(NULL, av_get_default_channel_layout(acodectx->channels), AV_SAMPLE_FMT_S16, 
+                acodectx->sample_rate, av_get_default_channel_layout(acodectx->channels), acodectx->sample_fmt, 
+                acodectx->sample_rate, 0, NULL);
+    if (swrctx == nullptr)
+    {
+        std::cerr << "swr_alloc_set_opts" << std::endl;
+        goto END;
+    }
+    // 初始化转换上下文
+    ret = swr_init(swrctx);
+    if (ret < 0)
+    {
+        std::cerr << "swr_init err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    //计算1s的数据大小，使缓冲区足够大
+    samplessize = av_samples_get_buffer_size(nullptr, acodectx->channels, acodectx->sample_rate, AV_SAMPLE_FMT_S16, 1); 
+    if (samplessize < 0)
+    {
+        std::cerr << "av_samples_get_buffer_size err : " << av_err2str(samplessize) << std::endl;
+        goto END;
+    }
+    sambuf = static_cast<uint8_t*>(av_mallocz(samplessize));
+    if (sambuf == nullptr)
+    {
+        std::cerr << "av_mallocz err" << std::endl;
+        goto END;
+    }
+#endif // RESAMPLE
 
 #ifdef ENCODE
     //---ENCODEVIDEO
@@ -611,6 +650,19 @@ int main(int argc, char* argv[])
                                 out_pcm.write(reinterpret_cast<const char*>(frame->data[j] + size * i), size);
                             }
                         }
+
+#ifdef RESAMPLE
+                        //转换，返回每个通道的样本数 
+                        ret = swr_convert(swrctx, &sambuf, samplessize, (const uint8_t **)frame->data, frame->nb_samples);//转换，返回每个通道的样本数 
+                        if (ret < 0)
+                        {
+                            std::cerr << "swr_convert err ： " << av_err2str(ret) << std::endl;
+                            break;
+                        }
+                        out_pcm2.write(reinterpret_cast<const char*>(sambuf), 
+                            av_samples_get_buffer_size(nullptr, frame->channels, ret, AV_SAMPLE_FMT_S16, 1));
+#endif // RESAMPLE
+
 #endif // NOSAVEPCM
 #ifdef ENCODE
                         ret = avcodec_send_frame(oacodectx, frame);
@@ -720,6 +772,7 @@ END:
     out_yuv.close();
     out_pcm.close();
     out_bgr.close();
+    out_pcm2.close();
     out_h264.close();
     out_mp3.close();
 
@@ -727,6 +780,12 @@ END:
     av_freep(&pointers[0]);
     av_freep(&pt[0]);
     sws_freeContext(swsctx);
+    if (swrctx != nullptr)
+    {
+        swr_free(&swrctx);
+        swrctx = nullptr;
+    }
+    av_free(sambuf);
 
     av_frame_free(&frame);
     av_packet_free(&pkt);
