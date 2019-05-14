@@ -1,0 +1,35 @@
+@@2019.05.14@@
+    最终得出的库未能解码mp3,因为没有编译libmp3lame.而且调试源码会乱跳,还是没必要重复造轮子~
+    https://github.com/gongluck/FFmpeg4.0-study.git
+
+$参考：
+    http://www.52ffmpeg.com/article/133.html
+    https://www.cnblogs.com/xylc/p/3683203.html
+    http://trac.ffmpeg.org/ticket/5546
+    https://www.e-learn.cn/content/qita/1293239
+    https://blog.csdn.net/sk950425/article/details/88321218
+    https://blog.csdn.net/saga1979/article/details/49510445?locationNum=1
+$
+
+1、安装TDM-GCC-64
+2、安装msys到TDM-GCC的安装目录中
+3、将call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars32.bat"加到msys.bat的第一行中
+3、(64位)将call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"加到msys.bat的第一行中
+4、复制coreutils-5.3.0-bin.zip的bin目录的文件、libiconv2.dll、libintl3.dll、msvcr100.dll和yasm-1.3.0-win64.exe(重命名为yasm.exe)到msys的bin目录下
+    复制SDL2-devel-2.0.9-mingw.tar的x86_64-w64-mingw32文件夹到ffmpeg源码目录并重命名为sdl
+    编译x264,./configure --prefix=./output32 --enable-shared --host=mingw32 --extra-ldflags=-Wl,--output-def=libx264.def,make,make install
+5、重命名msys的bin目录下的link.exe(linkold.exe)
+6、运行msys.bat，进入到ffmpeg源码，执行
+    make clean
+    PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/d/code/FFmpeg-n4.0/sdl/lib/pkgconfig
+    PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/d/code/FFmpeg-n4.0/x264/output32/lib/pkgconfig
+    export PKG_CONFIG_PATH
+    echo $PKG_CONFIG_PATH
+    ./configure --prefix=./msvc2019_32_shared --target-os=win32 --arch=x86 --toolchain=msvc --disable-static --enable-shared \
+        --enable-debug=3 --disable-optimizations --disable-stripping \
+        --enable-libx264 --enable-gpl --extra-cflags="-I./x264/output/include" --extra-ldflags="-LIBPATH:./x264/output32/lib"
+    (64位)./configure --prefix=./msvc2019_64_shared --target-os=win64 --arch=x86_64 --toolchain=msvc --disable-static --enable-shared
+            --enable-debug=3 --disable-optimizations --disable-stripping \
+            --enable-libx264 --enable-gpl --extra-cflags="-I./x264/output/include" --extra-ldflags="-LIBPATH:./x264/output32/lib"
+    make
+    make install

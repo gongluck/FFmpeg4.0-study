@@ -281,7 +281,7 @@ int main(int argc, char* argv[])
     ovcodec = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (ovcodec == nullptr)
     {
-        std::cerr << "avcodec_find_encoder err" << std::endl;
+        std::cerr << "avcodec_find_encoder AV_CODEC_ID_H264 err" << std::endl;
         goto END;
     }
     ovcodectx = avcodec_alloc_context3(ovcodec);
@@ -331,7 +331,7 @@ int main(int argc, char* argv[])
     oacodec = avcodec_find_encoder(AV_CODEC_ID_MP3);
     if (oacodec == nullptr)
     {
-        std::cerr << "avcodec_find_encoder err" << std::endl;
+        std::cerr << "avcodec_find_encoder AV_CODEC_ID_MP3 err" << std::endl;
         goto END;
     }
     oacodectx = avcodec_alloc_context3(oacodec);
