@@ -26,6 +26,7 @@
     <ClCompile Include="official example\demuxing_decoding.c" />
     <ClCompile Include="official example\encode_audio.c" />
     <ClCompile Include="official example\encode_video.c" />
+    <ClCompile Include="official example\extract_mvs.c" />
     <ClCompile Include="official example\metadata.c" />
     <ClCompile Include="official example\muxing.c" />
     <ClCompile Include="official example\my_example.cpp" />
