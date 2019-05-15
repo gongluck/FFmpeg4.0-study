@@ -3,14 +3,15 @@
 
 //#define NOVIDEO     //不解码视频
 //#define NOSAVEYUV   //不保存YUV
-#define SWSCALE     //视频帧转换,需禁用NOVIDEO
+#define SWSCALE     //视频帧转换,需禁用NOVIDEO和HWDECODE
 //#define NOAUDIO     //不解码音频
 //#define NOSAVEPCM   //不保存PCM
 #define RESAMPLE    //音频重采样,需禁用NOAUDIO    
 //#define AVIO        //使用AVIO
-#define ENCODE      //编码,需禁用NOVIDEO或者NOAUDIO
+#define ENCODE      //编码,需禁用NOVIDEO或者NOAUDIO,视频只在禁用HWDECODE下做了编码
 #define REMUX       //转封装
 #define MUXING      //封装,需打开ENCODE
+//#define HWDECODE    //硬解码
 
 #ifdef __cplusplus
 
@@ -75,7 +76,7 @@ int main(int argc, char* argv[])
     uint8_t* pt[4] = { 0 };
     int lz[4] = { 0 };
     int s = 0;
-    std::ofstream out_yuv, out_pcm, out_bgr, out_pcm2, out_h264, out_mp3;
+    std::ofstream out_yuv, out_hw, out_pcm, out_bgr, out_pcm2, out_h264, out_mp3;
     const char* in = "in.flv";
     int vindex = -1, aindex = -1;
     int ret = 0;
@@ -103,14 +104,20 @@ int main(int argc, char* argv[])
     // MUXING
     AVFormatContext* ofmt_ctx2 = nullptr;
     AVStream *ovstream2 = nullptr, *oastream2 = nullptr;
+    // HWDECODE
+    AVBufferRef* hwbufref = nullptr;
+    AVFrame* hwframe = nullptr;
+    uint8_t* hwframebuf = nullptr;
+    int hwbufsize = 0;
 
     out_yuv.open("out.yuv", std::ios::binary | std::ios::trunc);
+    out_hw.open("out2.yuv", std::ios::binary | std::ios::trunc);
     out_pcm.open("out.pcm", std::ios::binary | std::ios::trunc);
     out_bgr.open("out.bgr", std::ios::binary | std::ios::trunc);
     out_pcm2.open("out2.pcm", std::ios::binary | std::ios::trunc);
     out_h264.open("out.h264", std::ios::binary | std::ios::trunc);
     out_mp3.open("out.mp3", std::ios::binary | std::ios::trunc);
-    if (!out_yuv.is_open() || !out_pcm.is_open() || !out_bgr.is_open() || !out_pcm2.is_open() || !out_h264.is_open() || !out_mp3.is_open())
+    if (!out_yuv.is_open() || !out_hw.is_open() || !out_pcm.is_open() || !out_bgr.is_open() || !out_pcm2.is_open() || !out_h264.is_open() || !out_mp3.is_open())
     {
         std::cerr << "创建/打开输出文件失败" << std::endl;
         goto END;
@@ -159,7 +166,7 @@ int main(int argc, char* argv[])
     }
 #endif // AVIO
 
-    std::cerr << "get metadata : " << std::endl;
+    std::cout << "get metadata : " << std::endl;
     while ((dic = av_dict_get(fmt_ctx->metadata, "", dic, AV_DICT_IGNORE_SUFFIX)) != nullptr)
     {
         std::cerr << dic->key << " : " << dic->value << std::endl;
@@ -176,38 +183,25 @@ int main(int argc, char* argv[])
     // 打印输入信息
     av_dump_format(fmt_ctx, 0, fmt_ctx->url, 0);
 
-    //查找流
-    for (int i = 0; i < fmt_ctx->nb_streams; ++i)
+    // 查找流
+    ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &vcodec, 0);
+    if (ret < 0) 
     {
-        if (fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
-        {
-            vindex = vindex==-1 ? i : vindex;
-        }
-        else if (fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
-        {
-            aindex = aindex == -1 ? i : aindex;
-        }
+        std::cerr << "av_find_best_stream err ： " << av_err2str(ret) << std::endl;
     }
-    if (vindex == -1)
+    vindex = ret;
+    ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, &acodec, 0);
+    if (ret < 0)
     {
-        std::cerr << "找不到视频流" << std::endl;
+        std::cerr << "av_find_best_stream err ： " << av_err2str(ret) << std::endl;
     }
-    if (aindex == -1)
-    {
-        std::cerr << "找不到音频流" << std::endl;
-    }
+    aindex = ret;
 
-    //查找解码器
+    // 查找解码器
     if (vindex != -1)
     {
+        // 准备打开解码器
         vcodecpar = fmt_ctx->streams[vindex]->codecpar;
-        vcodec = avcodec_find_decoder(vcodecpar->codec_id);
-        if (vcodec == nullptr)
-        {
-            std::cerr << "avcodec_find_decoder err" << std::endl;
-            goto END;
-        }
-        //打开解码器
         vcodectx = avcodec_alloc_context3(vcodec);
         ret = avcodec_parameters_to_context(vcodectx, vcodecpar);// 参数拷贝
         if (ret < 0)
@@ -215,6 +209,65 @@ int main(int argc, char* argv[])
             std::cerr << "avcodec_parameters_to_context err ： " << av_err2str(ret) << std::endl;
             goto END;
         }
+#ifdef HWDECODE
+        // 查询硬解码支持
+        std::cout << "support hwdecode : " << std::endl;
+        auto type = av_hwdevice_iterate_types(AV_HWDEVICE_TYPE_NONE);;
+        for (; type != AV_HWDEVICE_TYPE_NONE; type = av_hwdevice_iterate_types(type))
+        {
+            std::cout << av_hwdevice_get_type_name(type) << std::endl; 
+        }
+        for (int i = 0;; i++)
+        {
+            const AVCodecHWConfig* config = avcodec_get_hw_config(vcodec, i);
+            if (config == nullptr)
+            {
+                std::cerr << "not support" << std::endl;
+                goto END;
+            }
+            if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX && 
+                config->device_type == AV_HWDEVICE_TYPE_DXVA2)
+            {
+                // 支持AV_HWDEVICE_TYPE_DXVA2
+                break;
+            }
+        }
+
+        // 硬解上下文
+        ret = av_hwdevice_ctx_create(&hwbufref, AV_HWDEVICE_TYPE_DXVA2, nullptr, nullptr, 0);
+        if (ret < 0)
+        {
+            std::cerr << "av_hwdevice_ctx_create err ： " << av_err2str(ret) << std::endl;
+            goto END;
+        }
+        vcodectx->hw_device_ctx = av_buffer_ref(hwbufref);
+        if (vcodectx->hw_device_ctx == nullptr)
+        {
+            std::cerr << "av_buffer_ref err"  << std::endl;
+            goto END;
+        }
+
+        // 硬解帧结构
+        hwframe = av_frame_alloc();
+        if (hwframe == nullptr)
+        {
+            std::cerr << "av_frame_alloc err" << std::endl;
+            goto END;
+        }
+        hwbufsize = av_image_get_buffer_size(AV_PIX_FMT_NV12/*假设是输出nv12*/, vcodectx->width, vcodectx->height, 1);
+        if (hwbufsize < 0)
+        {
+            std::cerr << "av_image_get_buffer_size err ： " << av_err2str(ret) << std::endl;
+            goto END;
+        }
+        hwframebuf = static_cast<uint8_t*>(av_malloc(hwbufsize));
+        if (hwframebuf == nullptr)
+        {
+            std::cerr << "av_malloc err ： " << std::endl;
+            goto END;
+        }
+#endif // HWDECODE
+        // 打开解码器
         ret = avcodec_open2(vcodectx, vcodec, nullptr);
         if (ret < 0)
         {
@@ -222,16 +275,11 @@ int main(int argc, char* argv[])
             goto END;
         }
     }
+
     if (aindex != -1)
     {
+        // 准备打开解码器
         acodecpar = fmt_ctx->streams[aindex]->codecpar;
-        acodec = avcodec_find_decoder(acodecpar->codec_id);
-        if (acodec == nullptr)
-        {
-            std::cerr << "avcodec_find_decoder err" << std::endl;
-            goto END;
-        }
-        //打开解码器
         acodectx = avcodec_alloc_context3(acodec);
         ret = avcodec_parameters_to_context(acodectx, acodecpar);// 参数拷贝
         if (ret < 0)
@@ -239,6 +287,8 @@ int main(int argc, char* argv[])
             std::cerr << "avcodec_parameters_to_context err ： " << av_err2str(ret) << std::endl;
             goto END;
         }
+
+        // 打开解码器
         ret = avcodec_open2(acodectx, acodec, nullptr);
         if (ret < 0)
         {
@@ -263,6 +313,16 @@ int main(int argc, char* argv[])
         std::cerr << "av_frame_alloc err" << std::endl;
         goto END;
     }
+
+    // 申请保存解码帧的内存
+    ret = av_image_alloc(pt, lz, vcodectx->width, vcodectx->height, vcodectx->pix_fmt, 1);
+    if (ret < 0)
+    {
+        std::cerr << "av_image_alloc err : " << av_err2str(ret) << std::endl;
+        goto END;
+    }
+    // 记录内存大小
+    s = ret;
 
 #ifdef SWSCALE
     // 创建转换上下文
@@ -330,14 +390,15 @@ int main(int argc, char* argv[])
         goto END;
     }
     // 设置参数
-    ovcodectx->bit_rate = vcodectx->bit_rate==0 ? 850000 : vcodectx->bit_rate;
+    ovcodectx->bit_rate = vcodectx->bit_rate == 0 ? 850000 : vcodectx->bit_rate;
     ovcodectx->width = vcodectx->width;
     ovcodectx->height = vcodectx->height;
     ovcodectx->time_base = { 1, 25 };
     ovcodectx->framerate = vcodectx->framerate;
     ovcodectx->gop_size = vcodectx->gop_size;
     ovcodectx->max_b_frames = vcodectx->max_b_frames;
-    ovcodectx->pix_fmt = vcodectx->pix_fmt;
+    ovcodectx->pix_fmt = AV_PIX_FMT_YUV420P;
+
     // --preset的参数主要调节编码速度和质量的平衡，有ultrafast、superfast、veryfast、faster、fast、medium、slow、slower、veryslow、placebo这10个选项，从快到慢。
     ret = av_dict_set(&param, "preset", "medium", 0);
     if (ret < 0)
@@ -438,6 +499,7 @@ int main(int argc, char* argv[])
     // 打开io
     if (!(ofmt_ctx->flags & AVFMT_NOFILE)) 
     {
+        // Demuxer will use avio_open, no opened file should be provided by the caller./
         ret = avio_open(&ofmt_ctx->pb, "out.mp4", AVIO_FLAG_WRITE);
         if (ret < 0) 
         {
@@ -506,16 +568,6 @@ int main(int argc, char* argv[])
     }
 #endif // MUXING
 
-    // 申请保存解码帧的内存
-    ret = av_image_alloc(pt, lz, vcodectx->width, vcodectx->height, vcodectx->pix_fmt, 1);
-    if (ret < 0)
-    {
-        std::cerr << "av_image_alloc err : " << av_err2str(ret) << std::endl;
-        goto END;
-    }
-    // 记录内存大小
-    s = ret; 
-
     // 从输入读取数据
     while (av_read_frame(fmt_ctx, pkt) >= 0)
     {
@@ -553,7 +605,7 @@ int main(int argc, char* argv[])
                         // 这种方式可以自动去除画面右边多余数据
                         av_image_copy(pt, lz, 
                             (const uint8_t* *)frame->data, frame->linesize, 
-                            static_cast<AVPixelFormat>(vcodectx->pix_fmt), frame->width, frame->height);
+                            static_cast<AVPixelFormat>(frame->format), frame->width, frame->height);
                         out_yuv.write(reinterpret_cast<const char*>(pt[0]), s);
 #endif // NOSAVEYUV
 #ifdef SWSCALE
@@ -594,8 +646,8 @@ int main(int argc, char* argv[])
                                 // 得到编码数据
                                 out_h264.write(reinterpret_cast<const char*>(opkt->data), opkt->size);
 #ifdef MUXING
-                                opkt->pts = av_rescale_q_rnd(opkt->pts, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-                                opkt->dts = av_rescale_q_rnd(opkt->dts, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base, (AVRounding)(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+                                opkt->pts = av_rescale_q(opkt->pts, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base);
+                                opkt->dts = av_rescale_q(opkt->dts, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base);
                                 opkt->duration = av_rescale_q(opkt->duration, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base);
                                 opkt->pos = -1;
                                 opkt->stream_index = 0;
@@ -610,6 +662,27 @@ int main(int argc, char* argv[])
                         }
 #endif // ENCODE
                     }
+#ifdef HWDECODE
+                    else if (frame->format == AV_PIX_FMT_DXVA2_VLD/*AV_HWDEVICE_TYPE_DXVA2对应的输出格式*/)
+                    {
+                        ret = av_hwframe_transfer_data(hwframe, frame, 0);
+                        if (ret < 0)
+                        {
+                            std::cerr << "av_hwframe_transfer_data err ： " << av_err2str(ret) << std::endl;
+                            break;
+                        }
+                        ret = av_image_copy_to_buffer(static_cast<uint8_t*>(hwframebuf), hwbufsize,
+                            (const uint8_t * const*)hwframe->data,
+                            hwframe->linesize, static_cast<AVPixelFormat>(hwframe->format),
+                            hwframe->width, hwframe->height, 1);
+                        if (ret <= 0)
+                        {
+                            std::cerr << "av_image_copy_to_buffer err ： " << av_err2str(ret) << std::endl;
+                            break;
+                        }
+                        out_hw.write(reinterpret_cast<const char*>(hwframebuf), ret);
+                    }
+#endif // HWDECODE
                 }
             }
 #endif // NOVIDEO
@@ -653,7 +726,7 @@ int main(int argc, char* argv[])
 
 #ifdef RESAMPLE
                         //转换，返回每个通道的样本数 
-                        ret = swr_convert(swrctx, &sambuf, samplessize, (const uint8_t **)frame->data, frame->nb_samples);//转换，返回每个通道的样本数 
+                        ret = swr_convert(swrctx, &sambuf, samplessize, (const uint8_t **)frame->data, frame->nb_samples);
                         if (ret < 0)
                         {
                             std::cerr << "swr_convert err ： " << av_err2str(ret) << std::endl;
@@ -688,8 +761,8 @@ int main(int argc, char* argv[])
                                 // 得到编码数据
                                 out_mp3.write(reinterpret_cast<const char*>(opkt->data), opkt->size);
 #ifdef MUXING
-                                opkt->pts = av_rescale_q_rnd(opkt->pts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-                                opkt->dts = av_rescale_q_rnd(opkt->dts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+                                opkt->pts = av_rescale_q(opkt->pts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base);
+                                opkt->dts = av_rescale_q(opkt->dts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base);
                                 opkt->duration = av_rescale_q(opkt->duration, fmt_ctx->streams[aindex]->time_base, oastream2->time_base);
                                 opkt->pos = -1;
                                 opkt->stream_index = 1;
@@ -724,8 +797,8 @@ int main(int argc, char* argv[])
 
         if (streamtmp != nullptr)
         {
-            pkt->pts = av_rescale_q_rnd(pkt->pts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
-            pkt->dts = av_rescale_q_rnd(pkt->dts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+            pkt->pts = av_rescale_q(pkt->pts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base);
+            pkt->dts = av_rescale_q(pkt->dts, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base);
             pkt->duration = av_rescale_q(pkt->duration, fmt_ctx->streams[pkt->stream_index]->time_base, streamtmp->time_base);
             pkt->pos = -1;
             ret = av_interleaved_write_frame(ofmt_ctx, pkt);
@@ -741,8 +814,6 @@ int main(int argc, char* argv[])
     }
 
 END:
-    std::cerr << "end..." << std::endl;
-    std::cin.get();
 
 #ifdef REMUX
     if (ofmt_ctx != nullptr)
@@ -770,40 +841,45 @@ END:
 
     // 关闭文件
     out_yuv.close();
+    out_hw.close();
     out_pcm.close();
     out_bgr.close();
     out_pcm2.close();
     out_h264.close();
     out_mp3.close();
 
-    // 释放资源
-    av_freep(&pointers[0]);
-    av_freep(&pt[0]);
-    sws_freeContext(swsctx);
-    if (swrctx != nullptr)
-    {
-        swr_free(&swrctx);
-        swrctx = nullptr;
-    }
-    av_free(sambuf);
+    std::cerr << "end..." << std::endl;
+    std::cin.get();
 
+    // DECODE
+    av_freep(&pt[0]);
     av_frame_free(&frame);
     av_packet_free(&pkt);
     avcodec_free_context(&vcodectx);
     avcodec_free_context(&acodectx);
     avformat_close_input(&fmt_ctx);
 
-    av_packet_free(&opkt);
-    avcodec_free_context(&ovcodectx);
-    avcodec_free_context(&oacodectx);
+    // HWDECODE
+    av_buffer_unref(&hwbufref);
+    av_frame_free(&hwframe);
+    av_free(hwframebuf);
 
+    // AVIO
+    av_free(aviobuf);
+    avio_context_free(&avioctx);
+    av_file_unmap(buf, size);
+
+    // REMUX
     // 关闭io
     if (ofmt_ctx != nullptr && !(ofmt_ctx->oformat->flags & AVFMT_NOFILE))
     {
         avio_closep(&ofmt_ctx->pb);
-    }   
+    }
     avformat_free_context(ofmt_ctx);
     ofmt_ctx = nullptr;
+
+    // MUXING
+    // 关闭io
     if (ofmt_ctx2 != nullptr && !(ofmt_ctx2->oformat->flags & AVFMT_NOFILE))
     {
         avio_closep(&ofmt_ctx2->pb);
@@ -811,12 +887,18 @@ END:
     avformat_free_context(ofmt_ctx2);
     ofmt_ctx2 = nullptr;
 
-    // 内部缓冲区可能已经改变，并且是不等于之前的aviobuf
-    if (avioctx != nullptr)
-    {
-        av_freep(&avioctx->buffer);
-        av_freep(&avioctx);
-    }
-    av_file_unmap(buf, size);
+    // ENCODE
+    av_packet_free(&opkt);
+    avcodec_free_context(&ovcodectx);
+    avcodec_free_context(&oacodectx);
+
+    // SWSCALE
+    sws_freeContext(swsctx);
+    av_freep(&pointers[0]);
+
+    // RESAMPLE
+    swr_free(&swrctx);
+    av_free(sambuf);
+
     return 0;
 }
