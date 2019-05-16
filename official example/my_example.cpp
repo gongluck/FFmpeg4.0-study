@@ -3,15 +3,15 @@
 
 //#define NOVIDEO     //不解码视频
 //#define NOSAVEYUV   //不保存YUV
-#define SWSCALE     //视频帧转换,需禁用NOVIDEO和HWDECODE
+//#define SWSCALE     //视频帧转换,需禁用NOVIDEO和HWDECODE
 //#define NOAUDIO     //不解码音频
 //#define NOSAVEPCM   //不保存PCM
-#define RESAMPLE    //音频重采样,需禁用NOAUDIO    
+//#define RESAMPLE    //音频重采样,需禁用NOAUDIO    
 //#define AVIO        //使用AVIO
-#define ENCODE      //编码,需禁用NOVIDEO或者NOAUDIO,视频只在禁用HWDECODE下做了编码
-#define REMUX       //转封装
-#define MUXING      //封装,需打开ENCODE
-//#define HWDECODE    //硬解码
+//#define ENCODE      //编码,需禁用NOVIDEO或者NOAUDIO,视频只在禁用HWDECODE下做了编码
+//#define REMUX       //转封装
+//#define MUXING      //封装,需打开ENCODE
+#define HWDECODE    //硬解码
 
 #ifdef __cplusplus
 
