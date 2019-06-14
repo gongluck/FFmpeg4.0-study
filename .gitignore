@@ -2,6 +2,7 @@
 tmp
 *.exe
 *.bgr
+*.rgb
 *.yuv
 *.pcm
 *.h264

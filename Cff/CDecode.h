@@ -69,4 +69,4 @@ private:
     AVCodecContext* acodectx_ = nullptr;
 };
 
-#endif __CDECODE_H__
+#endif//__CDECODE_H__
