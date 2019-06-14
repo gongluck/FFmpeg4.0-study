@@ -20,12 +20,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Cff\CDecode.cpp" />
+    <ClCompile Include="Cff\CSwr.cpp" />
     <ClCompile Include="Cff\CSws.cpp" />
     <ClCompile Include="Cff\test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Cff\CDecode.h" />
     <ClInclude Include="Cff\common.h" />
+    <ClInclude Include="Cff\CSwr.h" />
     <ClInclude Include="Cff\CSws.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

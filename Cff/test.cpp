@@ -1,11 +1,20 @@
 #include "CDecode.h"
 #include "CSws.h"
+#include "CSwr.h"
 #include <iostream>
 #include <fstream>
 
 CSws g_sws;
 uint8_t* g_pointers[4] = { 0 };
 int g_linesizes[4] = { 0 };
+
+CSwr g_swr;
+uint8_t** g_data = nullptr;
+int g_linesize = 0;
+int64_t g_layout = AV_CH_LAYOUT_STEREO;
+int g_rate = 44100;
+enum AVSampleFormat g_fmt = AV_SAMPLE_FMT_DBLP;
+
 
 void DecStatusCB(CDecode::STATUS status, std::string err, void* param)
 {
@@ -42,6 +51,23 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, void* param)
             video.write(reinterpret_cast<const char*>(g_pointers[0]), g_linesizes[0] * 240);
         }
     }
+    else if (frametype == CDecode::FRAMETYPE::AUDIO)
+    {
+        if (frame->format == AV_SAMPLE_FMT_FLTP)
+        {
+            static std::ofstream audio("out.pcm", std::ios::binary | std::ios::trunc);
+            std::string err;
+            int ret = g_swr.convert(g_data, g_linesize, (const uint8_t * *)frame->data, frame->nb_samples, err);
+            auto size = av_get_bytes_per_sample(g_fmt);
+            for (int i = 0; i < ret; ++i)
+            {
+                for (int j = 0; j < av_get_channel_layout_nb_channels(g_layout); ++j)
+                {
+                    audio.write(reinterpret_cast<const char*>(g_data[j] + size * i), size);
+                }
+            }
+        }
+    }
 }
 
 int main(int argc, char* argv[])
@@ -53,6 +79,11 @@ int main(int argc, char* argv[])
     ret = g_sws.set_dst_opt(AV_PIX_FMT_RGB24, 320, 240, err);
     ret = g_sws.lock_opt(err);
     int size = av_image_alloc(g_pointers, g_linesizes, 320, 240, AV_PIX_FMT_RGB24, 1);
+
+    ret = g_swr.set_src_opt(AV_CH_LAYOUT_STEREO, 48000, AV_SAMPLE_FMT_FLTP, err);
+    ret = g_swr.set_dst_opt(g_layout, g_rate, g_fmt, err);
+    ret = g_swr.lock_opt(err);
+    size = av_samples_alloc_array_and_samples(&g_data, &g_linesize, av_get_channel_layout_nb_channels(g_layout), g_rate, g_fmt, 0);
 
     CDecode decode;
     ret = decode.set_input("in.flv", err);
@@ -72,6 +103,12 @@ int main(int argc, char* argv[])
 
     ret = g_sws.unlock_opt(err);
     av_freep(&g_pointers[0]);
+    av_freep(g_pointers);
+
+    ret = g_swr.unlock_opt(err);
+    if (g_data)
+        av_freep(&g_data[0]);
+    av_freep(&g_data);
 
     return 0;
 }
