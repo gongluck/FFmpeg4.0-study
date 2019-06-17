@@ -16,9 +16,17 @@ int g_rate = 44100;
 enum AVSampleFormat g_fmt = AV_SAMPLE_FMT_DBLP;
 
 #define TESTCHECKRET(ret)\
-if(ret != true)\
+if(!ret)\
 {\
     std::cerr << err << std::endl;\
+}
+
+#define TESTCHECKRET2(ret)\
+if(!ret)\
+{\
+    std::cerr << err << std::endl;\
+    bret = false;\
+    return;\
 }
 
 void DecStatusCB(CDecode::STATUS status, std::string err, void* param)
@@ -29,14 +37,23 @@ void DecStatusCB(CDecode::STATUS status, std::string err, void* param)
 void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, void* param)
 {
     //std::cout << std::this_thread::get_id() << " got a frame." << frametype << std::endl;
+    std::string err;
     if (frametype == CDecode::FRAMETYPE::VIDEO)
     {
         if (frame->format == AV_PIX_FMT_YUV420P)
         {
+            static bool bret = false;
             static std::ofstream video("out.rgb", std::ios::binary | std::ios::trunc);
             static int i = 0;
-            if (++i > 9)
-                return; 
+            if (i++ == 0)
+            {
+                bret = g_sws.set_src_opt(static_cast<AVPixelFormat>(frame->format), frame->width, frame->height, err);
+                TESTCHECKRET2(bret);
+                bret = g_sws.set_dst_opt(AV_PIX_FMT_RGB24, 320, 240, err);
+                TESTCHECKRET2(bret);
+                bret = g_sws.lock_opt(err);
+                TESTCHECKRET2(bret);
+            }
 
             /*
             video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
@@ -44,7 +61,6 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, void* param)
             video.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
             */
 
-            std::string err;
             // 将输出翻转
             g_pointers[0] += g_linesizes[0] * (240 - 1);
             g_linesizes[0] *= -1;
@@ -60,8 +76,19 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, void* param)
     {
         if (frame->format == AV_SAMPLE_FMT_FLTP)
         {
+            static bool bret = false;
             static std::ofstream audio("out.pcm", std::ios::binary | std::ios::trunc);
-            std::string err;
+            static int i = 0;
+            if (i++ == 0)
+            {
+                bret = g_swr.set_src_opt(frame->channel_layout, frame->sample_rate, static_cast<AVSampleFormat>(frame->format), err);
+                TESTCHECKRET2(bret);
+                bret = g_swr.set_dst_opt(g_layout, g_rate, g_fmt, err);
+                TESTCHECKRET2(bret);
+                bret = g_swr.lock_opt(err);
+                TESTCHECKRET2(bret);
+            }
+ 
             // 返回每个通道(channel)的样本数(samples)
             int ret = g_swr.convert(g_data, g_linesize, (const uint8_t * *)frame->data, frame->nb_samples, err);
             // 获取样本格式对应的每个样本大小(Byte)
@@ -83,22 +110,8 @@ int main(int argc, char* argv[])
     std::string err;
     bool ret = false;
 
-    ret = g_sws.set_src_opt(AV_PIX_FMT_YUV420P, 576, 432, err);
-    TESTCHECKRET(ret);
-    ret = g_sws.set_dst_opt(AV_PIX_FMT_RGB24, 320, 240, err);
-    TESTCHECKRET(ret);
-    ret = g_sws.lock_opt(err);
-    TESTCHECKRET(ret);
-
     // 分配图像数据内存
     int size = av_image_alloc(g_pointers, g_linesizes, 320, 240, AV_PIX_FMT_RGB24, 1);
-
-    ret = g_swr.set_src_opt(AV_CH_LAYOUT_STEREO, 48000, AV_SAMPLE_FMT_FLTP, err);
-    TESTCHECKRET(ret);
-    ret = g_swr.set_dst_opt(g_layout, g_rate, g_fmt, err);
-    TESTCHECKRET(ret);
-    ret = g_swr.lock_opt(err);
-    TESTCHECKRET(ret);
 
     // 分配音频数据内存
     size = av_samples_alloc_array_and_samples(&g_data, &g_linesize, av_get_channel_layout_nb_channels(g_layout), g_rate, g_fmt, 0);
@@ -106,7 +119,7 @@ int main(int argc, char* argv[])
     CDecode decode;
     //ret = decode.set_input("in.flv", err);
     //TESTCHECKRET(ret);
-    ret = decode.set_input("rtmp:localhost/live/test", err);
+    ret = decode.set_input("rtmp://localhost/live/test", err);
     TESTCHECKRET(ret);
     ret = decode.set_dec_callback(DecFrameCB, nullptr, err);
     TESTCHECKRET(ret);

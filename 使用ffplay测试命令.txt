@@ -16,3 +16,6 @@ ffplay -ar 48000 -ac 2 -f f64le 48000_2_dblp.pcm
 
 **播放url**
 ffplay -fflags nobuffer -loop 0 rtmp://localhost/live/test
+
+**垂直翻转播放**
+ffplay -pixel_format rgb24 -video_size 720x480 -framerate 25 rgb24_test.rgb -vf vflip
