@@ -137,7 +137,7 @@ bool CDecode::stopdecode(std::string& err)
     if (vcodectx_ != nullptr)
     {
         avcodec_free_context(&vcodectx_);
-    } 
+    }
     if (acodectx_ != nullptr)
     {
         avcodec_free_context(&acodectx_);
@@ -154,7 +154,9 @@ bool CDecode::decodethread()
 {
     int ret;
     std::string err;
-
+    FRAMETYPE decodingtype = ERR; // 记录当前解码帧类型
+    AVCodecContext* codectx = nullptr;
+    // 分配AVPacket和AVFrame
     AVPacket* packet = av_packet_alloc();
     AVFrame* frame = av_frame_alloc();
     if (packet == nullptr || frame == nullptr)
@@ -168,19 +170,23 @@ bool CDecode::decodethread()
         av_frame_free(&frame);
         return false;
     }
+    // 初始化packet
     av_init_packet(packet);
-    
+
+    // 循环读数据解码数据
     while (true)
     {
         if (status_ != DECODING)
             break;
 
-        if (av_read_frame(fmtctx_, packet) < 0)
+        // 读数据
+        ret = av_read_frame(fmtctx_, packet);
+        if (ret < 0)
         {
             if (decstatuscb_ != nullptr)
             {
                 status_ = STOP;
-                decstatuscb_(STOP, "end of file.", decstatuscbparam_);
+                decstatuscb_(STOP, av_err2str(ret), decstatuscbparam_);
             }
             break; //这里认为视频读取完了
         }
@@ -188,82 +194,76 @@ bool CDecode::decodethread()
         if (packet->stream_index == vindex_)
         {
             // 解码视频帧
-            ret = avcodec_send_packet(vcodectx_, packet);
-            if (ret < 0)
-            {
-                if (decstatuscb_ != nullptr)
-                {
-                    status_ = STOP;
-                    decstatuscb_(STOP, av_err2str(ret), decstatuscbparam_);
-                }
-                break;
-            }
-            while (ret >= 0)
-            {
-                ret = avcodec_receive_frame(vcodectx_, frame);
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                {
-                    break;
-                }
-                else if (ret < 0)
-                {
-                    if (decstatuscb_ != nullptr)
-                    {
-                        decstatuscb_(DECODING, av_err2str(ret), decstatuscbparam_);
-                    }
-                    break;
-                }
-                else
-                {
-                    // 得到解码数据
-                    if (decframecb_ != nullptr)
-                    {
-                        decframecb_(frame, VIDEO, decframecbparam_);
-                    }
-                }
-            }
+            decodingtype = VIDEO;
+            codectx = vcodectx_;
         }
         else if (packet->stream_index == aindex_)
         {
             // 解码音频帧
-            ret = avcodec_send_packet(acodectx_, packet);
-            if (ret < 0)
+            decodingtype = AUDIO;
+            codectx = acodectx_;
+        }
+        else
+        {
+            decodingtype = ERR;
+            codectx = nullptr;
+        }
+
+        // 检查codectx
+        if (codectx == nullptr)
+        {
+            if (decstatuscb_ != nullptr)
             {
+                decstatuscb_(DECODING, "codectx is nullptr.", decstatuscbparam_);
+            }
+            continue;
+        }
+
+        // 发送将要解码的数据
+        ret = avcodec_send_packet(codectx, packet);
+        if (ret < 0)
+        {
+            status_ = STOP;
+            if (decstatuscb_ != nullptr)
+            {
+                decstatuscb_(STOP, av_err2str(ret), decstatuscbparam_);
+            }
+            break;
+        }
+        while (ret >= 0)
+        {
+            // 接收解码数据
+            ret = avcodec_receive_frame(codectx, frame);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            {
+                // 不完整或者EOF
+                break;
+            }
+            else if (ret < 0)
+            {
+                // 其他错误
                 if (decstatuscb_ != nullptr)
                 {
-                    status_ = STOP;
-                    decstatuscb_(STOP, av_err2str(ret), decstatuscbparam_);
+                    decstatuscb_(DECODING, av_err2str(ret), decstatuscbparam_);
                 }
                 break;
             }
-            while (ret >= 0)
+            else
             {
-                ret = avcodec_receive_frame(acodectx_, frame);
-                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                // 得到解码数据
+                if (decframecb_ != nullptr)
                 {
-                    break;
+                    decframecb_(frame, decodingtype, decframecbparam_);
                 }
-                else if (ret < 0)
-                {
-                    if (decstatuscb_ != nullptr)
-                    {
-                        decstatuscb_(DECODING, av_err2str(ret), decstatuscbparam_);
-                    }
-                    break;
-                }
-                else
-                {
-                    // 得到解码数据
-                    if (decframecb_ != nullptr)
-                    {
-                        decframecb_(frame, AUDIO, decframecbparam_);
-                    }
-                }
+                // 这里没有直接break，是因为存在再次调用avcodec_receive_frame能拿到新数据的可能
             }
         }
+
+        // 不再引用指向的缓冲区
         av_packet_unref(packet);
     }
 
+    // 清理packet和frame
     av_packet_free(&packet);
     av_frame_free(&frame);
 

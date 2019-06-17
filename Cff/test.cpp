@@ -15,10 +15,15 @@ int64_t g_layout = AV_CH_LAYOUT_STEREO;
 int g_rate = 44100;
 enum AVSampleFormat g_fmt = AV_SAMPLE_FMT_DBLP;
 
+#define TESTCHECKRET(ret)\
+if(ret != true)\
+{\
+    std::cerr << err << std::endl;\
+}
 
 void DecStatusCB(CDecode::STATUS status, std::string err, void* param)
 {
-    std::cout << std::this_thread::get_id() << " got a status " << status << std::endl;
+    std::cout << std::this_thread::get_id() << " got a status " << status << " " << err << std::endl;
 }
 
 void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, void* param)
@@ -41,13 +46,13 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, void* param)
 
             std::string err;
             // 将输出翻转
-            /*g_pointers[0] += g_linesizes[0] * (240 - 1);
-            g_linesizes[0] *= -1;*/
+            g_pointers[0] += g_linesizes[0] * (240 - 1);
+            g_linesizes[0] *= -1;
             // 转换
             int ret = g_sws.scale(frame->data, frame->linesize, 0, frame->height, g_pointers, g_linesizes, err);
             // 还原指针，以便拷贝数据
-            /*g_linesizes[0] *= -1;
-            g_pointers[0] -= g_linesizes[0] * (240 - 1);*/
+            g_linesizes[0] *= -1;
+            g_pointers[0] -= g_linesizes[0] * (240 - 1);
             video.write(reinterpret_cast<const char*>(g_pointers[0]), g_linesizes[0] * ret);
         }
     }
@@ -79,34 +84,50 @@ int main(int argc, char* argv[])
     bool ret = false;
 
     ret = g_sws.set_src_opt(AV_PIX_FMT_YUV420P, 576, 432, err);
+    TESTCHECKRET(ret);
     ret = g_sws.set_dst_opt(AV_PIX_FMT_RGB24, 320, 240, err);
+    TESTCHECKRET(ret);
     ret = g_sws.lock_opt(err);
+    TESTCHECKRET(ret);
+
     // 分配图像数据内存
     int size = av_image_alloc(g_pointers, g_linesizes, 320, 240, AV_PIX_FMT_RGB24, 1);
 
     ret = g_swr.set_src_opt(AV_CH_LAYOUT_STEREO, 48000, AV_SAMPLE_FMT_FLTP, err);
+    TESTCHECKRET(ret);
     ret = g_swr.set_dst_opt(g_layout, g_rate, g_fmt, err);
+    TESTCHECKRET(ret);
     ret = g_swr.lock_opt(err);
+    TESTCHECKRET(ret);
+
     // 分配音频数据内存
     size = av_samples_alloc_array_and_samples(&g_data, &g_linesize, av_get_channel_layout_nb_channels(g_layout), g_rate, g_fmt, 0);
 
     CDecode decode;
-    ret = decode.set_input("in.flv", err);
+    //ret = decode.set_input("in.flv", err);
+    //TESTCHECKRET(ret);
+    ret = decode.set_input("rtmp:localhost/live/test", err);
+    TESTCHECKRET(ret);
     ret = decode.set_dec_callback(DecFrameCB, nullptr, err);
+    TESTCHECKRET(ret);
     ret = decode.set_dec_status_callback(DecStatusCB, nullptr, err);
+    TESTCHECKRET(ret);
 
     int i = 0;
     while (i++ < 1)
     {
         ret = decode.begindecode(err);
+        TESTCHECKRET(ret);
 
         std::cout << "input to stop decoding." << std::endl;
         getchar();
 
         ret = decode.stopdecode(err);
+        TESTCHECKRET(ret);
     }
 
     ret = g_sws.unlock_opt(err);
+    TESTCHECKRET(ret);
     // 清理图像数据内存
     if (g_pointers)
     {
@@ -115,6 +136,7 @@ int main(int argc, char* argv[])
     av_freep(&g_pointers);
 
     ret = g_swr.unlock_opt(err);
+    TESTCHECKRET(ret);
     // 清理音频数据内存
     if (g_data)
     {

@@ -1,3 +1,4 @@
+http://www.ffmpeg.org/ffplay.html
 https://blog.csdn.net/qq_18086953/article/details/83014985
 
 **查看支持格式**
@@ -12,3 +13,6 @@ ffplay -pixel_format rgb24 -video_size 720x480 -framerate 25 rgb24_test.rgb
 **播放pcm数据**
 ffplay -ar 48000 -ac 2 -f f32le 48000_2_f32le.pcm
 ffplay -ar 48000 -ac 2 -f f64le 48000_2_dblp.pcm
+
+**播放url**
+ffplay -fflags nobuffer -loop 0 rtmp://localhost/live/test
