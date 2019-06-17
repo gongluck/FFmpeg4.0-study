@@ -33,7 +33,7 @@ public:
     // ½â³ýËø¶¨
     bool unlock_opt(std::string& err);
     // ×ª»»
-    bool scale(const uint8_t* const srcSlice[], const int srcStride[], int srcSliceY, int srcSliceH, uint8_t* const dst[], const int dstStride[], std::string& err);
+    int scale(const uint8_t* const srcSlice[], const int srcStride[], int srcSliceY, int srcSliceH, uint8_t* const dst[], const int dstStride[], std::string& err);
 
 private:
     STATUS status_ = STOP;

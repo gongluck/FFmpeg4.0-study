@@ -54,11 +54,11 @@ bool CSws::unlock_opt(std::string& err)
     return true;
 }
 
-bool CSws::scale(const uint8_t* const srcSlice[], const int srcStride[], int srcSliceY, int srcSliceH, uint8_t* const dst[], const int dstStride[], std::string& err)
+int CSws::scale(const uint8_t* const srcSlice[], const int srcStride[], int srcSliceY, int srcSliceH, uint8_t* const dst[], const int dstStride[], std::string& err)
 {
     LOCK();
     CHECKNOTSTOP(err);
     int ret = sws_scale(swsctx_, srcSlice, srcStride, srcSliceY, srcSliceH, dst, dstStride);
     CHECKFFRET(ret);
-    return true;
+    return ret;
 }
