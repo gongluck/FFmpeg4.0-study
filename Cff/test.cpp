@@ -34,12 +34,19 @@ void DecStatusCB(CDecode::STATUS status, std::string err, void* param)
     std::cout << std::this_thread::get_id() << " got a status " << status << " " << err << std::endl;
 }
 
-void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, void* param)
+void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, int64_t timestamp, void* param)
 {
     //std::cout << std::this_thread::get_id() << " got a frame." << frametype << std::endl;
     std::string err;
+    CDecode* dec = static_cast<CDecode*>(param);
+    std::cout << "timestamp : " << timestamp << std::endl;
+    if (timestamp > 10)
+    {
+        dec->seek(5, AVSEEK_FLAG_ANY, err);
+    }
     if (frametype == CDecode::FRAMETYPE::VIDEO)
     {
+        std::cout << "v frame pts : " << frame->pts << std::endl;
         if (frame->format == AV_PIX_FMT_YUV420P)
         {
             static bool bret = false;
@@ -74,6 +81,7 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, void* param)
     }
     else if (frametype == CDecode::FRAMETYPE::AUDIO)
     {
+        std::cout << "a frame pts : " << frame->pts << std::endl;
         if (frame->format == AV_SAMPLE_FMT_FLTP)
         {
             static bool bret = false;
@@ -117,11 +125,10 @@ int main(int argc, char* argv[])
     size = av_samples_alloc_array_and_samples(&g_data, &g_linesize, av_get_channel_layout_nb_channels(g_layout), g_rate, g_fmt, 0);
 
     CDecode decode;
-    //ret = decode.set_input("in.flv", err);
-    //TESTCHECKRET(ret);
-    ret = decode.set_input("rtmp://localhost/live/test", err);
+    ret = decode.set_input("in.flv", err);
+    //ret = decode.set_input("rtmp://localhost/live/test", err);
     TESTCHECKRET(ret);
-    ret = decode.set_dec_callback(DecFrameCB, nullptr, err);
+    ret = decode.set_dec_callback(DecFrameCB, &decode, err);
     TESTCHECKRET(ret);
     ret = decode.set_dec_status_callback(DecStatusCB, nullptr, err);
     TESTCHECKRET(ret);

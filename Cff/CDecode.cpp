@@ -150,6 +150,22 @@ bool CDecode::stopdecode(std::string& err)
     return true;
 }
 
+bool CDecode::seek(int64_t timestamp, int flags, std::string& err)
+{
+    LOCK();
+    AVRational timebase = { 0 };
+    if (vindex_ != -1)
+    {
+        timebase = fmtctx_->streams[vindex_]->time_base;
+    }
+    else if (aindex_ != -1)
+    {
+        timebase = fmtctx_->streams[aindex_]->time_base;
+    }
+    CHECKFFRET(av_seek_frame(fmtctx_, -1, av_rescale_q_rnd(timestamp, { 1, 1 }, timebase, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), flags));
+    return true;
+}
+
 bool CDecode::decodethread()
 {
     int ret;
@@ -253,7 +269,9 @@ bool CDecode::decodethread()
                 // 得到解码数据
                 if (decframecb_ != nullptr)
                 {
-                    decframecb_(frame, decodingtype, decframecbparam_);
+                    decframecb_(frame, decodingtype,
+                        av_rescale_q_rnd(frame->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)),
+                        decframecbparam_);
                 }
                 // 这里没有直接break，是因为存在再次调用avcodec_receive_frame能拿到新数据的可能
             }

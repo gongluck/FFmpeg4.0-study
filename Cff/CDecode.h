@@ -28,7 +28,7 @@ public:
     // 状态通知回调声明
     typedef void (*DecStatusCallback)(STATUS status, std::string err, void* param);
     // 解码帧回调声明
-    typedef void (*DecFrameCallback)(const AVFrame* frame, FRAMETYPE frametype, void* param);
+    typedef void (*DecFrameCallback)(const AVFrame* frame, FRAMETYPE frametype, int64_t timestamp, void* param);
 
     // 设置输入
     bool set_input(const std::string& input, std::string& err);
@@ -44,6 +44,9 @@ public:
     bool begindecode(std::string& err);
     // 停止解码
     bool stopdecode(std::string& err);
+
+    // 跳转到指定秒
+    bool seek(int64_t timestamp, int flags, std::string& err);
 
 private:
     // 解码线程
