@@ -40,6 +40,9 @@ public:
     // 设置解码状态变化回调
     bool set_dec_status_callback(DecStatusCallback cb, void* param, std::string& err);
 
+    // 设置硬解
+    bool set_hwdec_type(AVHWDeviceType hwtype, bool trans, std::string& err);
+
     // 开始解码
     bool begindecode(std::string& err);
     // 停止解码
@@ -70,6 +73,10 @@ private:
     AVFormatContext* fmtctx_ = nullptr;
     AVCodecContext* vcodectx_ = nullptr;
     AVCodecContext* acodectx_ = nullptr;
+
+    AVHWDeviceType hwtype_ = AV_HWDEVICE_TYPE_NONE;
+    AVPixelFormat hwfmt_ = AV_PIX_FMT_NONE;
+    bool trans_ = false;
 };
 
 #endif//__CDECODE_H__

@@ -47,7 +47,19 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, int64_t time
     if (frametype == CDecode::FRAMETYPE::VIDEO)
     {
         std::cout << "v frame pts : " << frame->pts << std::endl;
-        if (frame->format == AV_PIX_FMT_YUV420P)
+        if (frame->format == AV_PIX_FMT_D3D11)
+        {
+            std::cout << "AV_PIX_FMT_D3D11 frame." << std::endl;
+        } 
+        else if (frame->format == AV_PIX_FMT_DXVA2_VLD)
+        {
+            std::cout << "AV_PIX_FMT_DXVA2_VLD frame." << std::endl;
+        }
+        else if (frame->format == AV_PIX_FMT_NV12)
+        {
+            std::cout << "AV_PIX_FMT_NV12 frame." << std::endl;
+        }
+        else if (frame->format == AV_PIX_FMT_YUV420P)
         {
             static bool bret = false;
             static std::ofstream video("out.rgb", std::ios::binary | std::ios::trunc);
@@ -131,6 +143,8 @@ int main(int argc, char* argv[])
     ret = decode.set_dec_callback(DecFrameCB, &decode, err);
     TESTCHECKRET(ret);
     ret = decode.set_dec_status_callback(DecStatusCB, nullptr, err);
+    TESTCHECKRET(ret);
+    ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, false, err);
     TESTCHECKRET(ret);
 
     int i = 0;

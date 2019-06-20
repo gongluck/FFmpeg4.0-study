@@ -51,6 +51,15 @@ bool CDecode::set_dec_status_callback(DecStatusCallback cb, void* param, std::st
     return true;
 }
 
+bool CDecode::set_hwdec_type(AVHWDeviceType hwtype, bool trans, std::string& err)
+{
+    LOCK();
+    CHECKSTOP(err);
+    hwtype_ = hwtype;
+    trans_ = trans;
+    return true;
+}
+
 bool CDecode::begindecode(std::string& err)
 {
     LOCK();
@@ -99,6 +108,41 @@ bool CDecode::begindecode(std::string& err)
         }
         ret = avcodec_parameters_to_context(vcodectx_, fmtctx_->streams[vindex_]->codecpar);
         CHECKFFRETANDCTX(ret, vcodectx_);
+        if (hwtype_ != AV_HWDEVICE_TYPE_NONE)
+        {
+            // 查询硬解码支持
+            for (int i = 0;; i++)
+            {
+                const AVCodecHWConfig* config = avcodec_get_hw_config(vcodec, i);
+                if (config == nullptr)
+                {
+                    err = vcodec->name + std::string(" not support ") + av_hwdevice_get_type_name(hwtype_);
+                    break;
+                }
+                if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+                    config->device_type == hwtype_)
+                {
+                    // 硬解上下文
+                    AVBufferRef* hwbufref = nullptr;
+                    ret = av_hwdevice_ctx_create(&hwbufref, hwtype_, nullptr, nullptr, 0);
+                    if (ret < 0)
+                    {
+                        err = av_err2str(ret);
+                    }
+                    else
+                    {
+                        vcodectx_->hw_device_ctx = av_buffer_ref(hwbufref);
+                        if (vcodectx_->hw_device_ctx == nullptr)
+                        {
+                            err = "av_buffer_ref(hwbufref) return nullptr.";
+                        }
+                        av_buffer_unref(&hwbufref);
+                        hwfmt_ = config->pix_fmt;
+                    }
+                    break;
+                }
+            }
+        }
         ret = avcodec_open2(vcodectx_, vcodec, nullptr);
         CHECKFFRETANDCTX(ret, vcodectx_);
     }
@@ -175,6 +219,7 @@ bool CDecode::decodethread()
     // 分配AVPacket和AVFrame
     AVPacket* packet = av_packet_alloc();
     AVFrame* frame = av_frame_alloc();
+    AVFrame* traframe = av_frame_alloc();
     if (packet == nullptr || frame == nullptr)
     {
         if (decstatuscb_ != nullptr)
@@ -184,6 +229,7 @@ bool CDecode::decodethread()
         }
         av_packet_free(&packet);
         av_frame_free(&frame);
+        av_frame_free(&traframe);
         return false;
     }
     // 初始化packet
@@ -269,9 +315,36 @@ bool CDecode::decodethread()
                 // 得到解码数据
                 if (decframecb_ != nullptr)
                 {
-                    decframecb_(frame, decodingtype,
-                        av_rescale_q_rnd(frame->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)),
-                        decframecbparam_);
+                    if (packet->stream_index == vindex_ // 视频帧 
+                        && hwtype_ != AV_HWDEVICE_TYPE_NONE // 使用硬解
+                        && frame->format == hwfmt_ // 硬解格式
+                        && trans_ // 转换
+                        )
+                    {
+                        ret = av_hwframe_transfer_data(traframe, frame, 0);
+                        if (ret < 0)
+                        {
+                            if (decstatuscb_ != nullptr)
+                            {
+                                decstatuscb_(DECODING, av_err2str(ret), decstatuscbparam_);
+                            }
+                        }
+                        else
+                        {
+                            traframe->pts = frame->pts;
+                            traframe->pkt_dts = frame->pkt_dts;
+                            traframe->pkt_duration = frame->pkt_duration;
+                            decframecb_(traframe, decodingtype,
+                                av_rescale_q_rnd(traframe->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)),
+                                decframecbparam_);
+                        }
+                    }
+                    else
+                    {
+                        decframecb_(frame, decodingtype,
+                            av_rescale_q_rnd(frame->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)),
+                            decframecbparam_);
+                    }
                 }
                 // 这里没有直接break，是因为存在再次调用avcodec_receive_frame能拿到新数据的可能
             }
@@ -284,6 +357,7 @@ bool CDecode::decodethread()
     // 清理packet和frame
     av_packet_free(&packet);
     av_frame_free(&frame);
+    av_frame_free(&traframe);
 
     return true;
 }
