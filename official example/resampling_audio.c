@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2012 Stefano Sabatini
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -148,7 +148,7 @@ int main_resampling_audio(int argc, char **argv)
      * ensuring that the output buffer will contain at least all the
      * converted input samples */
     max_dst_nb_samples = dst_nb_samples =
-        av_rescale_rnd(src_nb_samples, dst_rate, src_rate, AV_ROUND_UP);
+        (int)av_rescale_rnd(src_nb_samples, dst_rate, src_rate, AV_ROUND_UP);
 
     /* buffer is going to be directly written to a rawaudio file, no alignment */
     dst_nb_channels = av_get_channel_layout_nb_channels(dst_ch_layout);
@@ -165,7 +165,7 @@ int main_resampling_audio(int argc, char **argv)
         fill_samples((double *)src_data[0], src_nb_samples, src_nb_channels, src_rate, &t);
 
         /* compute destination number of samples */
-        dst_nb_samples = av_rescale_rnd(swr_get_delay(swr_ctx, src_rate) +
+        dst_nb_samples = (int)av_rescale_rnd(swr_get_delay(swr_ctx, src_rate) +
                                         src_nb_samples, dst_rate, src_rate, AV_ROUND_UP);
         if (dst_nb_samples > max_dst_nb_samples) {
             av_freep(&dst_data[0]);

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2014 Stefano Sabatini
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -36,7 +36,7 @@
 
 struct buffer_data {
     uint8_t *ptr;
-    size_t size; ///< size left in the buffer
+    int size; ///< size left in the buffer
 };
 
 static int read_packet(void *opaque, uint8_t *buf, int buf_size)

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2012 Stefano Sabatini
  * Copyright (c) 2014 Clément Bœsch
  *
@@ -51,7 +51,7 @@ static int decode_packet(const AVPacket *pkt)
         }
 
         if (ret >= 0) {
-            int i;
+            unsigned int i;
             AVFrameSideData *sd;
 
             video_frame_count++;

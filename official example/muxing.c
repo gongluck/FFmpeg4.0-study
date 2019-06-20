@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2003 Fabrice Bellard
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -232,9 +232,9 @@ static void open_audio(AVFormatContext *oc, AVCodec *codec, OutputStream *ost, A
 
     /* init signal generator */
     ost->t     = 0;
-    ost->tincr = 2 * M_PI * 110.0 / c->sample_rate;
+    ost->tincr = (float)(2 * M_PI * 110.0 / c->sample_rate);
     /* increment frequency by 110 Hz per second */
-    ost->tincr2 = 2 * M_PI * 110.0 / c->sample_rate / c->sample_rate;
+    ost->tincr2 = (float)(2 * M_PI * 110.0 / c->sample_rate / c->sample_rate);
 
     if (c->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)
         nb_samples = 10000;
@@ -285,7 +285,7 @@ static AVFrame *get_audio_frame(OutputStream *ost)
 
     /* check if we want to generate more frames */
     if (av_compare_ts(ost->next_pts, ost->enc->time_base,
-                      STREAM_DURATION, (AVRational){ 1, 1 }) >= 0)
+                      (int64_t)STREAM_DURATION, (AVRational){ 1, 1 }) >= 0)
         return NULL;
 
     for (j = 0; j <frame->nb_samples; j++) {
@@ -312,7 +312,6 @@ static int write_audio_frame(AVFormatContext *oc, OutputStream *ost)
     AVPacket pkt = { 0 }; // data and size must be 0;
     AVFrame *frame;
     int ret;
-    int got_packet;
     int dst_nb_samples;
 
     av_init_packet(&pkt);
@@ -323,7 +322,7 @@ static int write_audio_frame(AVFormatContext *oc, OutputStream *ost)
     if (frame) {
         /* convert samples from native format to destination codec format, using the resampler */
             /* compute destination number of samples */
-            dst_nb_samples = av_rescale_rnd(swr_get_delay(ost->swr_ctx, c->sample_rate) + frame->nb_samples,
+            dst_nb_samples = (int)av_rescale_rnd(swr_get_delay(ost->swr_ctx, c->sample_rate) + frame->nb_samples,
                                             c->sample_rate, c->sample_rate, AV_ROUND_UP);
             av_assert0(dst_nb_samples == frame->nb_samples);
 
@@ -476,7 +475,7 @@ static AVFrame *get_video_frame(OutputStream *ost)
 
     /* check if we want to generate more frames */
     if (av_compare_ts(ost->next_pts, c->time_base,
-                      STREAM_DURATION, (AVRational){ 1, 1 }) >= 0)
+                      (int64_t)STREAM_DURATION, (AVRational){ 1, 1 }) >= 0)
         return NULL;
 
     /* when we pass a frame to the encoder, it may keep a reference to it
@@ -499,12 +498,12 @@ static AVFrame *get_video_frame(OutputStream *ost)
                 exit(1);
             }
         }
-        fill_yuv_image(ost->tmp_frame, ost->next_pts, c->width, c->height);
+        fill_yuv_image(ost->tmp_frame, (int)ost->next_pts, c->width, c->height);
         sws_scale(ost->sws_ctx, (const uint8_t * const *) ost->tmp_frame->data,
                   ost->tmp_frame->linesize, 0, c->height, ost->frame->data,
                   ost->frame->linesize);
     } else {
-        fill_yuv_image(ost->frame, ost->next_pts, c->width, c->height);
+        fill_yuv_image(ost->frame, (int)ost->next_pts, c->width, c->height);
     }
 
     ost->frame->pts = ost->next_pts++;

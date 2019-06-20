@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2015 Anton Khirnov
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -48,7 +48,7 @@ typedef struct DecodeContext {
     AVBufferRef *hw_device_ref;
 } DecodeContext;
 
-static int get_format(AVCodecContext *avctx, const enum AVPixelFormat *pix_fmts)
+enum AVPixelFormat get_format(struct AVCodecContext* avctx, const enum AVPixelFormat* pix_fmts)
 {
     while (*pix_fmts != AV_PIX_FMT_NONE) {
         if (*pix_fmts == AV_PIX_FMT_QSV) {
@@ -148,7 +148,8 @@ int main_qsvdec(int argc, char **argv)
 
     AVIOContext *output_ctx = NULL;
 
-    int ret, i;
+    int ret;
+    unsigned int i;
 
     if (argc < 3) {
         fprintf(stderr, "Usage: %s <input file> <output file>\n", argv[0]);

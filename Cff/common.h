@@ -12,6 +12,9 @@ extern "C"
 }
 // C++÷– π”√av_err2str∫Í
 static char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+#ifdef av_err2str
+#undef av_err2str
+#endif
 #define av_err2str(errnum) \
     av_make_error_string(av_error, AV_ERROR_MAX_STRING_SIZE, errnum)
 #endif

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2001 Fabrice Bellard
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -89,7 +89,7 @@ static int select_channel_layout(const AVCodec *codec)
         }
         p++;
     }
-    return best_ch_layout;
+    return (int)(best_ch_layout);
 }
 
 static void encode(AVCodecContext *ctx, AVFrame *frame, AVPacket *pkt,
@@ -206,7 +206,7 @@ int main_encode_audio(int argc, char **argv)
 
     /* encode a single tone sound */
     t = 0;
-    tincr = 2 * M_PI * 440.0 / c->sample_rate;
+    tincr = (float)(2 * M_PI * 440.0 / c->sample_rate);
     for (i = 0; i < 200; i++) {
         /* make sure the frame is writable -- makes a copy if the encoder
          * kept a reference internally */

@@ -1,17 +1,17 @@
-#include <iostream>
+ï»¿#include <iostream>
 #include <fstream>
 
-//#define NOVIDEO     //²»½âÂëÊÓÆµ
-//#define NOSAVEYUV   //²»±£´æYUV
-//#define SWSCALE     //ÊÓÆµÖ¡×ª»»,Ğè½ûÓÃNOVIDEOºÍHWDECODE
-//#define NOAUDIO     //²»½âÂëÒôÆµ
-//#define NOSAVEPCM   //²»±£´æPCM
-//#define RESAMPLE    //ÒôÆµÖØ²ÉÑù,Ğè½ûÓÃNOAUDIO    
-//#define AVIO        //Ê¹ÓÃAVIO
-//#define ENCODE      //±àÂë,Ğè½ûÓÃNOVIDEO»òÕßNOAUDIO,ÊÓÆµÖ»ÔÚ½ûÓÃHWDECODEÏÂ×öÁË±àÂë
-//#define REMUX       //×ª·â×°
-//#define MUXING      //·â×°,Ğè´ò¿ªENCODE
-#define HWDECODE    //Ó²½âÂë
+//#define NOVIDEO     //ä¸è§£ç è§†é¢‘
+//#define NOSAVEYUV   //ä¸ä¿å­˜YUV
+//#define SWSCALE     //è§†é¢‘å¸§è½¬æ¢,éœ€ç¦ç”¨NOVIDEOå’ŒHWDECODE
+//#define NOAUDIO     //ä¸è§£ç éŸ³é¢‘
+//#define NOSAVEPCM   //ä¸ä¿å­˜PCM
+//#define RESAMPLE    //éŸ³é¢‘é‡é‡‡æ ·,éœ€ç¦ç”¨NOAUDIO    
+//#define AVIO        //ä½¿ç”¨AVIO
+//#define ENCODE      //ç¼–ç ,éœ€ç¦ç”¨NOVIDEOæˆ–è€…NOAUDIO,è§†é¢‘åªåœ¨ç¦ç”¨HWDECODEä¸‹åšäº†ç¼–ç 
+//#define REMUX       //è½¬å°è£…
+//#define MUXING      //å°è£…,éœ€æ‰“å¼€ENCODE
+#define HWDECODE    //ç¡¬è§£ç 
 
 #ifdef __cplusplus
 
@@ -20,7 +20,7 @@ extern "C"
 
 #endif
 
-// FFmpeg Í·ÎÄ¼ş
+// FFmpeg å¤´æ–‡ä»¶
 #include <libavformat/avformat.h>
 #include <libavformat/avio.h>
 #include <libswscale/swscale.h> // sws_cale
@@ -32,21 +32,24 @@ extern "C"
 #ifdef __cplusplus
 
 }
-// C++ÖĞÊ¹ÓÃav_err2strºê
+// C++ä¸­ä½¿ç”¨av_err2strå®
+#ifdef av_err2str
+#undef av_err2str
+#endif
 char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
 #define av_err2str(errnum) \
     av_make_error_string(av_error, AV_ERROR_MAX_STRING_SIZE, errnum)
 
 #endif
 
-// ×Ô¶¨Òå²ÎÊı£¬´«µİÄÚ´æbufºÍ´óĞ¡
+// è‡ªå®šä¹‰å‚æ•°ï¼Œä¼ é€’å†…å­˜bufå’Œå¤§å°
 typedef struct __BUFER_DATA__
 {
     uint8_t* buf;
-    size_t size;
+    int size;
 }Bufdata;
 
-// ×Ô¶¨ÒåÎÄ¼ş¶Á²Ù×÷
+// è‡ªå®šä¹‰æ–‡ä»¶è¯»æ“ä½œ
 int read_packet(void *opaque, uint8_t *buf, int buf_size)
 {
     Bufdata* bd = static_cast<Bufdata*>(opaque);
@@ -119,20 +122,20 @@ int main(int argc, char* argv[])
     out_mp3.open("out.mp3", std::ios::binary | std::ios::trunc);
     if (!out_yuv.is_open() || !out_hw.is_open() || !out_pcm.is_open() || !out_bgr.is_open() || !out_pcm2.is_open() || !out_h264.is_open() || !out_mp3.is_open())
     {
-        std::cerr << "´´½¨/´ò¿ªÊä³öÎÄ¼şÊ§°Ü" << std::endl;
+        std::cerr << "åˆ›å»º/æ‰“å¼€è¾“å‡ºæ–‡ä»¶å¤±è´¥" << std::endl;
         goto END;
     }
 
-    // ÈÕÖ¾
+    // æ—¥å¿—
     av_log_set_level(AV_LOG_ERROR);
 
-    // ´ò¿ªÊäÈë
+    // æ‰“å¼€è¾“å…¥
 #ifdef AVIO
-    // ÄÚ´æÓ³Éä
+    // å†…å­˜æ˜ å°„
     ret = av_file_map("in.mkv", &buf, &size, 0, nullptr);
     if (ret < 0)
     {
-        std::cerr << "av_file_map err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "av_file_map err ï¼š " << av_err2str(ret) << std::endl;
         goto END;
     }
     fmt_ctx = avformat_alloc_context();
@@ -154,14 +157,14 @@ int main(int argc, char* argv[])
     ret = avformat_open_input(&fmt_ctx, nullptr, nullptr, nullptr);
     if (ret < 0)
     {
-        std::cerr << "avformat_open_input err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "avformat_open_input err ï¼š " << av_err2str(ret) << std::endl;
         goto END;
     }
 #else
     ret = avformat_open_input(&fmt_ctx, in, nullptr, nullptr);
     if (ret < 0)
     {
-        std::cerr << "avformat_open_input err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "avformat_open_input err ï¼š " << av_err2str(ret) << std::endl;
         goto END;
     }
 #endif // AVIO
@@ -172,45 +175,45 @@ int main(int argc, char* argv[])
         std::cerr << dic->key << " : " << dic->value << std::endl;
     }
 
-    // ²éÕÒÁ÷ĞÅÏ¢£¬¶ÔÊäÈë½øĞĞÔ¤´¦Àí
+    // æŸ¥æ‰¾æµä¿¡æ¯ï¼Œå¯¹è¾“å…¥è¿›è¡Œé¢„å¤„ç†
     ret = avformat_find_stream_info(fmt_ctx, nullptr);
     if (ret < 0)
     {
-        std::cerr << "avformat_find_stream_info err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "avformat_find_stream_info err ï¼š " << av_err2str(ret) << std::endl;
         goto END;
     }
 
-    // ´òÓ¡ÊäÈëĞÅÏ¢
+    // æ‰“å°è¾“å…¥ä¿¡æ¯
     av_dump_format(fmt_ctx, 0, fmt_ctx->url, 0);
 
-    // ²éÕÒÁ÷
+    // æŸ¥æ‰¾æµ
     ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &vcodec, 0);
     if (ret < 0) 
     {
-        std::cerr << "av_find_best_stream err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "av_find_best_stream err ï¼š " << av_err2str(ret) << std::endl;
     }
     vindex = ret;
     ret = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, &acodec, 0);
     if (ret < 0)
     {
-        std::cerr << "av_find_best_stream err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "av_find_best_stream err ï¼š " << av_err2str(ret) << std::endl;
     }
     aindex = ret;
 
-    // ²éÕÒ½âÂëÆ÷
+    // æŸ¥æ‰¾è§£ç å™¨
     if (vindex != -1)
     {
-        // ×¼±¸´ò¿ª½âÂëÆ÷
+        // å‡†å¤‡æ‰“å¼€è§£ç å™¨
         vcodecpar = fmt_ctx->streams[vindex]->codecpar;
         vcodectx = avcodec_alloc_context3(vcodec);
-        ret = avcodec_parameters_to_context(vcodectx, vcodecpar);// ²ÎÊı¿½±´
+        ret = avcodec_parameters_to_context(vcodectx, vcodecpar);// å‚æ•°æ‹·è´
         if (ret < 0)
         {
-            std::cerr << "avcodec_parameters_to_context err £º " << av_err2str(ret) << std::endl;
+            std::cerr << "avcodec_parameters_to_context err ï¼š " << av_err2str(ret) << std::endl;
             goto END;
         }
 #ifdef HWDECODE
-        // ²éÑ¯Ó²½âÂëÖ§³Ö
+        // æŸ¥è¯¢ç¡¬è§£ç æ”¯æŒ
         std::cout << "support hwdecode : " << std::endl;
         auto type = av_hwdevice_iterate_types(AV_HWDEVICE_TYPE_NONE);;
         for (; type != AV_HWDEVICE_TYPE_NONE; type = av_hwdevice_iterate_types(type))
@@ -228,16 +231,16 @@ int main(int argc, char* argv[])
             if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX && 
                 config->device_type == AV_HWDEVICE_TYPE_DXVA2)
             {
-                // Ö§³ÖAV_HWDEVICE_TYPE_DXVA2
+                // æ”¯æŒAV_HWDEVICE_TYPE_DXVA2
                 break;
             }
         }
 
-        // Ó²½âÉÏÏÂÎÄ
+        // ç¡¬è§£ä¸Šä¸‹æ–‡
         ret = av_hwdevice_ctx_create(&hwbufref, AV_HWDEVICE_TYPE_DXVA2, nullptr, nullptr, 0);
         if (ret < 0)
         {
-            std::cerr << "av_hwdevice_ctx_create err £º " << av_err2str(ret) << std::endl;
+            std::cerr << "av_hwdevice_ctx_create err ï¼š " << av_err2str(ret) << std::endl;
             goto END;
         }
         vcodectx->hw_device_ctx = av_buffer_ref(hwbufref);
@@ -247,57 +250,57 @@ int main(int argc, char* argv[])
             goto END;
         }
 
-        // Ó²½âÖ¡½á¹¹
+        // ç¡¬è§£å¸§ç»“æ„
         hwframe = av_frame_alloc();
         if (hwframe == nullptr)
         {
             std::cerr << "av_frame_alloc err" << std::endl;
             goto END;
         }
-        hwbufsize = av_image_get_buffer_size(AV_PIX_FMT_NV12/*¼ÙÉèÊÇÊä³önv12*/, vcodectx->width, vcodectx->height, 1);
+        hwbufsize = av_image_get_buffer_size(AV_PIX_FMT_NV12/*å‡è®¾æ˜¯è¾“å‡ºnv12*/, vcodectx->width, vcodectx->height, 1);
         if (hwbufsize < 0)
         {
-            std::cerr << "av_image_get_buffer_size err £º " << av_err2str(ret) << std::endl;
+            std::cerr << "av_image_get_buffer_size err ï¼š " << av_err2str(ret) << std::endl;
             goto END;
         }
         hwframebuf = static_cast<uint8_t*>(av_malloc(hwbufsize));
         if (hwframebuf == nullptr)
         {
-            std::cerr << "av_malloc err £º " << std::endl;
+            std::cerr << "av_malloc err ï¼š " << std::endl;
             goto END;
         }
 #endif // HWDECODE
-        // ´ò¿ª½âÂëÆ÷
+        // æ‰“å¼€è§£ç å™¨
         ret = avcodec_open2(vcodectx, vcodec, nullptr);
         if (ret < 0)
         {
-            std::cerr << "avcodec_open2 err £º " << av_err2str(ret) << std::endl;
+            std::cerr << "avcodec_open2 err ï¼š " << av_err2str(ret) << std::endl;
             goto END;
         }
     }
 
     if (aindex != -1)
     {
-        // ×¼±¸´ò¿ª½âÂëÆ÷
+        // å‡†å¤‡æ‰“å¼€è§£ç å™¨
         acodecpar = fmt_ctx->streams[aindex]->codecpar;
         acodectx = avcodec_alloc_context3(acodec);
-        ret = avcodec_parameters_to_context(acodectx, acodecpar);// ²ÎÊı¿½±´
+        ret = avcodec_parameters_to_context(acodectx, acodecpar);// å‚æ•°æ‹·è´
         if (ret < 0)
         {
-            std::cerr << "avcodec_parameters_to_context err £º " << av_err2str(ret) << std::endl;
+            std::cerr << "avcodec_parameters_to_context err ï¼š " << av_err2str(ret) << std::endl;
             goto END;
         }
 
-        // ´ò¿ª½âÂëÆ÷
+        // æ‰“å¼€è§£ç å™¨
         ret = avcodec_open2(acodectx, acodec, nullptr);
         if (ret < 0)
         {
-            std::cerr << "avcodec_open2 err £º " << av_err2str(ret) << std::endl;
+            std::cerr << "avcodec_open2 err ï¼š " << av_err2str(ret) << std::endl;
             goto END;
         }
     }
 
-    // ´´½¨AVPacket
+    // åˆ›å»ºAVPacket
     pkt = av_packet_alloc();
     if (pkt == nullptr)
     {
@@ -306,7 +309,7 @@ int main(int argc, char* argv[])
     }
     av_init_packet(pkt);
 
-    // ´´½¨AVFrame
+    // åˆ›å»ºAVFrame
     frame = av_frame_alloc();
     if (frame == nullptr)
     {
@@ -314,36 +317,36 @@ int main(int argc, char* argv[])
         goto END;
     }
 
-    // ÉêÇë±£´æ½âÂëÖ¡µÄÄÚ´æ
+    // ç”³è¯·ä¿å­˜è§£ç å¸§çš„å†…å­˜
     ret = av_image_alloc(pt, lz, vcodectx->width, vcodectx->height, vcodectx->pix_fmt, 1);
     if (ret < 0)
     {
         std::cerr << "av_image_alloc err : " << av_err2str(ret) << std::endl;
         goto END;
     }
-    // ¼ÇÂ¼ÄÚ´æ´óĞ¡
+    // è®°å½•å†…å­˜å¤§å°
     s = ret;
 
 #ifdef SWSCALE
-    // ´´½¨×ª»»ÉÏÏÂÎÄ
+    // åˆ›å»ºè½¬æ¢ä¸Šä¸‹æ–‡
     swsctx = sws_getContext(vcodectx->width, vcodectx->height, AV_PIX_FMT_YUV420P, 320, 240, AV_PIX_FMT_RGB24, SWS_BILINEAR, nullptr, nullptr, nullptr);
     if (swsctx == nullptr)
     {
         std::cerr << "sws_getContext err" << std::endl;
         goto END;
     }
-    // ·ÖÅäÄÚ´æ¿Õ¼ä
-    // ffmpeÀïºÜ¶à»ã±àÓÅ»¯£¬ËüÒ»´Î¶ÁÈ¡»òĞ´ÈëµÄÊı¾İ¿ÉÄÜ±ÈÄãÏëÏóÖĞµÄÒª¶à£¨Ä³Ğ©¶ÔÆëÒªÇó£©£¬ËùÒÔffmpeg²Ù×÷µÄÄÚ´æÇøÓò£¬Ò»°ã¶¼Ó¦¸ÃÓÃav_malloc·ÖÅä£¬Õâ¸öº¯ÊıÍ¨³£·ÖÅäµÄÄÚ´æ»á±ÈÄãÒªÇóµÄ¶à£¬¾ÍÊÇÎªÁËÓ¦¸¶ÕâĞ©³¡¾°
+    // åˆ†é…å†…å­˜ç©ºé—´
+    // ffmpeé‡Œå¾ˆå¤šæ±‡ç¼–ä¼˜åŒ–ï¼Œå®ƒä¸€æ¬¡è¯»å–æˆ–å†™å…¥çš„æ•°æ®å¯èƒ½æ¯”ä½ æƒ³è±¡ä¸­çš„è¦å¤šï¼ˆæŸäº›å¯¹é½è¦æ±‚ï¼‰ï¼Œæ‰€ä»¥ffmpegæ“ä½œçš„å†…å­˜åŒºåŸŸï¼Œä¸€èˆ¬éƒ½åº”è¯¥ç”¨av_mallocåˆ†é…ï¼Œè¿™ä¸ªå‡½æ•°é€šå¸¸åˆ†é…çš„å†…å­˜ä¼šæ¯”ä½ è¦æ±‚çš„å¤šï¼Œå°±æ˜¯ä¸ºäº†åº”ä»˜è¿™äº›åœºæ™¯
     ret = av_image_alloc(pointers, linesizes, 320, 240, AV_PIX_FMT_RGB24, 16);
     if (ret < 0)
     {
-        std::cerr << "av_image_alloc err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "av_image_alloc err ï¼š " << av_err2str(ret) << std::endl;
         goto END;
     }
 #endif // SWSCALE
 
 #ifdef RESAMPLE
-    // ´´½¨×ª»»ÉÏÏÂÎÄ
+    // åˆ›å»ºè½¬æ¢ä¸Šä¸‹æ–‡
     swrctx = swr_alloc_set_opts(NULL, av_get_default_channel_layout(acodectx->channels), AV_SAMPLE_FMT_S16, 
                 acodectx->sample_rate, av_get_default_channel_layout(acodectx->channels), acodectx->sample_fmt, 
                 acodectx->sample_rate, 0, NULL);
@@ -352,14 +355,14 @@ int main(int argc, char* argv[])
         std::cerr << "swr_alloc_set_opts" << std::endl;
         goto END;
     }
-    // ³õÊ¼»¯×ª»»ÉÏÏÂÎÄ
+    // åˆå§‹åŒ–è½¬æ¢ä¸Šä¸‹æ–‡
     ret = swr_init(swrctx);
     if (ret < 0)
     {
         std::cerr << "swr_init err : " << av_err2str(ret) << std::endl;
         goto END;
     }
-    //¼ÆËã1sµÄÊı¾İ´óĞ¡£¬Ê¹»º³åÇø×ã¹»´ó
+    //è®¡ç®—1sçš„æ•°æ®å¤§å°ï¼Œä½¿ç¼“å†²åŒºè¶³å¤Ÿå¤§
     samplessize = av_samples_get_buffer_size(nullptr, acodectx->channels, acodectx->sample_rate, AV_SAMPLE_FMT_S16, 1); 
     if (samplessize < 0)
     {
@@ -376,7 +379,7 @@ int main(int argc, char* argv[])
 
 #ifdef ENCODE
     //---ENCODEVIDEO
-    // ²éÕÒ±àÂëÆ÷
+    // æŸ¥æ‰¾ç¼–ç å™¨
     ovcodec = avcodec_find_encoder(AV_CODEC_ID_H264);
     if (ovcodec == nullptr)
     {
@@ -389,7 +392,7 @@ int main(int argc, char* argv[])
         std::cerr << "avcodec_alloc_context3 err" << std::endl;
         goto END;
     }
-    // ÉèÖÃ²ÎÊı
+    // è®¾ç½®å‚æ•°
     ovcodectx->bit_rate = vcodectx->bit_rate == 0 ? 850000 : vcodectx->bit_rate;
     ovcodectx->width = vcodectx->width;
     ovcodectx->height = vcodectx->height;
@@ -399,35 +402,35 @@ int main(int argc, char* argv[])
     ovcodectx->max_b_frames = vcodectx->max_b_frames;
     ovcodectx->pix_fmt = AV_PIX_FMT_YUV420P;
 
-    // --presetµÄ²ÎÊıÖ÷Òªµ÷½Ú±àÂëËÙ¶ÈºÍÖÊÁ¿µÄÆ½ºâ£¬ÓĞultrafast¡¢superfast¡¢veryfast¡¢faster¡¢fast¡¢medium¡¢slow¡¢slower¡¢veryslow¡¢placeboÕâ10¸öÑ¡Ïî£¬´Ó¿ìµ½Âı¡£
+    // --presetçš„å‚æ•°ä¸»è¦è°ƒèŠ‚ç¼–ç é€Ÿåº¦å’Œè´¨é‡çš„å¹³è¡¡ï¼Œæœ‰ultrafastã€superfastã€veryfastã€fasterã€fastã€mediumã€slowã€slowerã€veryslowã€placeboè¿™10ä¸ªé€‰é¡¹ï¼Œä»å¿«åˆ°æ…¢ã€‚
     ret = av_dict_set(&param, "preset", "medium", 0);
     if (ret < 0)
     {
-        std::cerr << "av_opt_set err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "av_opt_set err ï¼š " << av_err2str(ret) << std::endl;
         goto END;
     }
-    ret = av_dict_set(&param, "tune", "zerolatency", 0);  //ÊµÏÖÊµÊ±±àÂë£¬ÓĞĞ§½µµÍÊä³ö´óĞ¡
+    ret = av_dict_set(&param, "tune", "zerolatency", 0);  //å®ç°å®æ—¶ç¼–ç ï¼Œæœ‰æ•ˆé™ä½è¾“å‡ºå¤§å°
     if (ret < 0)
     {
-        std::cerr << "av_opt_set err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "av_opt_set err ï¼š " << av_err2str(ret) << std::endl;
         goto END;
     }
     //ret = av_dict_set(&param, "profile", "main", 0);
     //if (ret < 0)
     //{
-    //    std::cerr << "av_opt_set err £º " << av_err2str(ret) << std::endl;
+    //    std::cerr << "av_opt_set err ï¼š " << av_err2str(ret) << std::endl;
     //    goto END;
     //}
     ret = avcodec_open2(ovcodectx, ovcodec, &param);
     if (ret < 0)
     {
-        std::cerr << "avcodec_open2 err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "avcodec_open2 err ï¼š " << av_err2str(ret) << std::endl;
         goto END;
     }
     //ENCODEVIDEO---
 
     //---ENCODEAUDIO
-    // ²éÕÒ±àÂëÆ÷
+    // æŸ¥æ‰¾ç¼–ç å™¨
     oacodec = avcodec_find_encoder(AV_CODEC_ID_MP3);
     if (oacodec == nullptr)
     {
@@ -440,7 +443,7 @@ int main(int argc, char* argv[])
         std::cerr << "avcodec_alloc_context3 err" << std::endl;
         goto END;
     }
-    // ÉèÖÃ²ÎÊı
+    // è®¾ç½®å‚æ•°
     oacodectx->bit_rate = acodectx->bit_rate;
     oacodectx->sample_fmt = acodectx->sample_fmt;
     oacodectx->sample_rate = acodectx->sample_rate;
@@ -449,7 +452,7 @@ int main(int argc, char* argv[])
     ret = avcodec_open2(oacodectx, oacodec, nullptr);
     if (ret < 0)
     {
-        std::cerr << "avcodec_open2 err £º " << av_err2str(ret) << std::endl;
+        std::cerr << "avcodec_open2 err ï¼š " << av_err2str(ret) << std::endl;
         goto END;
     }
     //ENCODEAUDIO---
@@ -464,14 +467,14 @@ int main(int argc, char* argv[])
 #endif // ENCODE
 
 #ifdef REMUX
-    // ´´½¨Êä³ö
+    // åˆ›å»ºè¾“å‡º
     ret = avformat_alloc_output_context2(&ofmt_ctx, nullptr, nullptr, "out.mp4");
     if (ret < 0)
     {
         std::cerr << "avformat_alloc_output_context2 err : " << av_err2str(ret) << std::endl;
         goto END;
     }
-    //´´½¨Á÷
+    //åˆ›å»ºæµ
     ovstream = avformat_new_stream(ofmt_ctx, nullptr);
     oastream = avformat_new_stream(ofmt_ctx, nullptr);
     if (ovstream == nullptr || oastream == nullptr)
@@ -479,7 +482,7 @@ int main(int argc, char* argv[])
         std::cerr << "avformat_new_stream err" << std::endl;
         goto END;
     }
-    //¸´ÖÆÅäÖÃĞÅÏ¢
+    //å¤åˆ¶é…ç½®ä¿¡æ¯
     ret = avcodec_parameters_from_context(ovstream->codecpar, vcodectx);
     if (ret < 0)
     {
@@ -493,10 +496,10 @@ int main(int argc, char* argv[])
         goto END;
     }
     av_dump_format(ofmt_ctx, 0, ofmt_ctx->url, 1);
-    // ±ê¼Ç²»ĞèÒªÖØĞÂ±à½âÂë
+    // æ ‡è®°ä¸éœ€è¦é‡æ–°ç¼–è§£ç 
     ovstream->codecpar->codec_tag = 0;
     oastream->codecpar->codec_tag = 0;
-    // ´ò¿ªio
+    // æ‰“å¼€io
     if (!(ofmt_ctx->flags & AVFMT_NOFILE)) 
     {
         // Demuxer will use avio_open, no opened file should be provided by the caller./
@@ -507,7 +510,7 @@ int main(int argc, char* argv[])
             goto END;
         }
     }
-    // Ğ´ÎÄ¼şÍ·
+    // å†™æ–‡ä»¶å¤´
     ret = avformat_write_header(ofmt_ctx, nullptr);
     if (ret < 0)
     {
@@ -517,14 +520,14 @@ int main(int argc, char* argv[])
 #endif // REMUX
 
 #ifdef MUXING
-    // ´´½¨Êä³ö
+    // åˆ›å»ºè¾“å‡º
     ret = avformat_alloc_output_context2(&ofmt_ctx2, nullptr, nullptr, "out2.mp4");
     if (ret < 0)
     {
         std::cerr << "avformat_alloc_output_context2 err : " << av_err2str(ret) << std::endl;
         goto END;
     }
-    //´´½¨Á÷
+    //åˆ›å»ºæµ
     ovstream2 = avformat_new_stream(ofmt_ctx2, nullptr);
     oastream2 = avformat_new_stream(ofmt_ctx2, nullptr);
     if (ovstream2 == nullptr || oastream2 == nullptr)
@@ -532,7 +535,7 @@ int main(int argc, char* argv[])
         std::cerr << "avformat_new_stream err" << std::endl;
         goto END;
     }
-    //¸´ÖÆÅäÖÃĞÅÏ¢
+    //å¤åˆ¶é…ç½®ä¿¡æ¯
     ret = avcodec_parameters_from_context(ovstream2->codecpar, ovcodectx);
     if (ret < 0)
     {
@@ -546,10 +549,10 @@ int main(int argc, char* argv[])
         goto END;
     }
     av_dump_format(ofmt_ctx2, 0, ofmt_ctx2->url, 1);
-    // ±ê¼Ç²»ĞèÒªÖØĞÂ±à½âÂë
+    // æ ‡è®°ä¸éœ€è¦é‡æ–°ç¼–è§£ç 
     ovstream2->codecpar->codec_tag = 0;
     oastream2->codecpar->codec_tag = 0;
-    // ´ò¿ªio
+    // æ‰“å¼€io
     if (!(ofmt_ctx2->flags & AVFMT_NOFILE))
     {
         ret = avio_open(&ofmt_ctx2->pb, "out2.mp4", AVIO_FLAG_WRITE);
@@ -559,7 +562,7 @@ int main(int argc, char* argv[])
             goto END;
         }
     }
-    // Ğ´ÎÄ¼şÍ·
+    // å†™æ–‡ä»¶å¤´
     ret = avformat_write_header(ofmt_ctx2, nullptr);
     if (ret < 0)
     {
@@ -568,17 +571,17 @@ int main(int argc, char* argv[])
     }
 #endif // MUXING
 
-    // ´ÓÊäÈë¶ÁÈ¡Êı¾İ
+    // ä»è¾“å…¥è¯»å–æ•°æ®
     while (av_read_frame(fmt_ctx, pkt) >= 0)
     {
         if (pkt->stream_index == vindex)
         {
 #ifndef NOVIDEO
-            // ½âÂëÊÓÆµÖ¡
+            // è§£ç è§†é¢‘å¸§
             ret = avcodec_send_packet(vcodectx, pkt);
             if (ret < 0)
             {
-                std::cerr << "avcodec_send_packet err £º " << av_err2str(ret) << std::endl;
+                std::cerr << "avcodec_send_packet err ï¼š " << av_err2str(ret) << std::endl;
                 break;
             }
             while (ret >= 0)
@@ -590,33 +593,33 @@ int main(int argc, char* argv[])
                 }
                 else if (ret < 0)
                 {
-                    std::cerr << "avcodec_receive_frame err £º " << av_err2str(ret) << std::endl;
+                    std::cerr << "avcodec_receive_frame err ï¼š " << av_err2str(ret) << std::endl;
                     break;
                 }
                 else
                 {
-                    // µÃµ½½âÂëÊı¾İ
+                    // å¾—åˆ°è§£ç æ•°æ®
                     if (frame->format == AV_PIX_FMT_YUV420P)
                     {
 #ifndef NOSAVEYUV
                         //out_yuv.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
                         //out_yuv.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
                         //out_yuv.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
-                        // ÕâÖÖ·½Ê½¿ÉÒÔ×Ô¶¯È¥³ı»­ÃæÓÒ±ß¶àÓàÊı¾İ
+                        // è¿™ç§æ–¹å¼å¯ä»¥è‡ªåŠ¨å»é™¤ç”»é¢å³è¾¹å¤šä½™æ•°æ®
                         av_image_copy(pt, lz, 
                             (const uint8_t* *)frame->data, frame->linesize, 
                             static_cast<AVPixelFormat>(frame->format), frame->width, frame->height);
                         out_yuv.write(reinterpret_cast<const char*>(pt[0]), s);
 #endif // NOSAVEYUV
 #ifdef SWSCALE
-                        // ÊÓÆµÖ¡¸ñÊ½×ª»»
+                        // è§†é¢‘å¸§æ ¼å¼è½¬æ¢
                         ret = sws_scale(swsctx, frame->data, frame->linesize, 0, frame->height, pointers, linesizes);
                         if (ret <= 0)
                         {
-                            std::cerr << "sws_scale err £º " << av_err2str(ret) << std::endl;
+                            std::cerr << "sws_scale err ï¼š " << av_err2str(ret) << std::endl;
                             break;
                         }
-                        // ·­×ª
+                        // ç¿»è½¬
                         pointers[0] += linesizes[0] * (ret - 1);
                         linesizes[0] *= -1;
                         out_bgr.write(reinterpret_cast<const char*>(pointers[0]), linesizes[0] * ret);
@@ -626,7 +629,7 @@ int main(int argc, char* argv[])
                         ret = avcodec_send_frame(ovcodectx, frame);
                         if (ret < 0)
                         {
-                            std::cerr << "avcodec_send_frame err £º " << av_err2str(ret) << std::endl;
+                            std::cerr << "avcodec_send_frame err ï¼š " << av_err2str(ret) << std::endl;
                             break;
                         }
                         while (ret >= 0)
@@ -638,12 +641,12 @@ int main(int argc, char* argv[])
                             }
                             else if (ret < 0)
                             {
-                                std::cerr << "avcodec_receive_packet err £º " << av_err2str(ret) << std::endl;
+                                std::cerr << "avcodec_receive_packet err ï¼š " << av_err2str(ret) << std::endl;
                                 break;
                             }
                             else
                             {
-                                // µÃµ½±àÂëÊı¾İ
+                                // å¾—åˆ°ç¼–ç æ•°æ®
                                 out_h264.write(reinterpret_cast<const char*>(opkt->data), opkt->size);
 #ifdef MUXING
                                 opkt->pts = av_rescale_q(opkt->pts, fmt_ctx->streams[vindex]->time_base, ovstream2->time_base);
@@ -654,7 +657,7 @@ int main(int argc, char* argv[])
                                 ret = av_interleaved_write_frame(ofmt_ctx2, opkt);
                                 if (ret < 0)
                                 {
-                                    std::cerr << "av_interleaved_write_frame err £º " << av_err2str(ret) << std::endl;
+                                    std::cerr << "av_interleaved_write_frame err ï¼š " << av_err2str(ret) << std::endl;
                                 }
 #endif // MUXING
                                 av_packet_unref(opkt);
@@ -663,12 +666,12 @@ int main(int argc, char* argv[])
 #endif // ENCODE
                     }
 #ifdef HWDECODE
-                    else if (frame->format == AV_PIX_FMT_DXVA2_VLD/*AV_HWDEVICE_TYPE_DXVA2¶ÔÓ¦µÄÊä³ö¸ñÊ½*/)
+                    else if (frame->format == AV_PIX_FMT_DXVA2_VLD/*AV_HWDEVICE_TYPE_DXVA2å¯¹åº”çš„è¾“å‡ºæ ¼å¼*/)
                     {
                         ret = av_hwframe_transfer_data(hwframe, frame, 0);
                         if (ret < 0)
                         {
-                            std::cerr << "av_hwframe_transfer_data err £º " << av_err2str(ret) << std::endl;
+                            std::cerr << "av_hwframe_transfer_data err ï¼š " << av_err2str(ret) << std::endl;
                             break;
                         }
                         ret = av_image_copy_to_buffer(static_cast<uint8_t*>(hwframebuf), hwbufsize,
@@ -677,7 +680,7 @@ int main(int argc, char* argv[])
                             hwframe->width, hwframe->height, 1);
                         if (ret <= 0)
                         {
-                            std::cerr << "av_image_copy_to_buffer err £º " << av_err2str(ret) << std::endl;
+                            std::cerr << "av_image_copy_to_buffer err ï¼š " << av_err2str(ret) << std::endl;
                             break;
                         }
                         out_hw.write(reinterpret_cast<const char*>(hwframebuf), ret);
@@ -690,11 +693,11 @@ int main(int argc, char* argv[])
         else if (pkt->stream_index == aindex)
         {
 #ifndef NOAUDIO
-            // ½âÂëÒôÆµÖ¡
+            // è§£ç éŸ³é¢‘å¸§
             ret = avcodec_send_packet(acodectx, pkt);
             if (ret < 0)
             {
-                std::cerr << "avcodec_send_packet err £º " << av_err2str(ret) << std::endl;
+                std::cerr << "avcodec_send_packet err ï¼š " << av_err2str(ret) << std::endl;
                 break;
             }
             while (ret >= 0)
@@ -706,12 +709,12 @@ int main(int argc, char* argv[])
                 }
                 else if (ret < 0)
                 {
-                    std::cerr << "avcodec_receive_frame err £º " << av_err2str(ret) << std::endl;
+                    std::cerr << "avcodec_receive_frame err ï¼š " << av_err2str(ret) << std::endl;
                     break;
                 }
                 else
                 {
-                    // µÃµ½½âÂëÊı¾İ
+                    // å¾—åˆ°è§£ç æ•°æ®
                     if (frame->format == AV_SAMPLE_FMT_FLTP)
                     {
 #ifndef NOSAVEPCM
@@ -725,11 +728,11 @@ int main(int argc, char* argv[])
                         }
 
 #ifdef RESAMPLE
-                        //×ª»»£¬·µ»ØÃ¿¸öÍ¨µÀµÄÑù±¾Êı 
+                        //è½¬æ¢ï¼Œè¿”å›æ¯ä¸ªé€šé“çš„æ ·æœ¬æ•° 
                         ret = swr_convert(swrctx, &sambuf, samplessize, (const uint8_t **)frame->data, frame->nb_samples);
                         if (ret < 0)
                         {
-                            std::cerr << "swr_convert err £º " << av_err2str(ret) << std::endl;
+                            std::cerr << "swr_convert err ï¼š " << av_err2str(ret) << std::endl;
                             break;
                         }
                         out_pcm2.write(reinterpret_cast<const char*>(sambuf), 
@@ -741,7 +744,7 @@ int main(int argc, char* argv[])
                         ret = avcodec_send_frame(oacodectx, frame);
                         if (ret < 0)
                         {
-                            std::cerr << "avcodec_send_frame err £º " << av_err2str(ret) << std::endl;
+                            std::cerr << "avcodec_send_frame err ï¼š " << av_err2str(ret) << std::endl;
                             break;
                         }
                         while (ret >= 0)
@@ -753,12 +756,12 @@ int main(int argc, char* argv[])
                             }
                             else if (ret < 0)
                             {
-                                std::cerr << "avcodec_receive_packet err £º " << av_err2str(ret) << std::endl;
+                                std::cerr << "avcodec_receive_packet err ï¼š " << av_err2str(ret) << std::endl;
                                 break;
                             }
                             else
                             {
-                                // µÃµ½±àÂëÊı¾İ
+                                // å¾—åˆ°ç¼–ç æ•°æ®
                                 out_mp3.write(reinterpret_cast<const char*>(opkt->data), opkt->size);
 #ifdef MUXING
                                 opkt->pts = av_rescale_q(opkt->pts, fmt_ctx->streams[aindex]->time_base, oastream2->time_base);
@@ -769,7 +772,7 @@ int main(int argc, char* argv[])
                                 ret = av_interleaved_write_frame(ofmt_ctx2, opkt);
                                 if (ret < 0)
                                 {
-                                    std::cerr << "av_interleaved_write_frame err £º " << av_err2str(ret) << std::endl;
+                                    std::cerr << "av_interleaved_write_frame err ï¼š " << av_err2str(ret) << std::endl;
                                 }
 #endif // MUXING
                                 av_packet_unref(opkt);
@@ -804,12 +807,12 @@ int main(int argc, char* argv[])
             ret = av_interleaved_write_frame(ofmt_ctx, pkt);
             if (ret < 0)
             {
-                std::cerr << "REMUX av_interleaved_write_frame err £º " << av_err2str(ret) << std::endl;
+                std::cerr << "REMUX av_interleaved_write_frame err ï¼š " << av_err2str(ret) << std::endl;
             }
         }
 #endif // REMUX
 
-        // ¸´Î»dataºÍsize
+        // å¤ä½dataå’Œsize
         av_packet_unref(pkt);
     }
 
@@ -818,11 +821,11 @@ END:
 #ifdef REMUX
     if (ofmt_ctx != nullptr)
     {
-        // Ğ´ÎÄ¼şÎ²
+        // å†™æ–‡ä»¶å°¾
         ret = av_write_trailer(ofmt_ctx);
         if (ret < 0)
         {
-            std::cerr << "av_write_trailer err £º " << av_err2str(ret) << std::endl;
+            std::cerr << "av_write_trailer err ï¼š " << av_err2str(ret) << std::endl;
         }
     }
 #endif // REMUX
@@ -830,16 +833,16 @@ END:
 #ifdef MUXING
     if (ofmt_ctx2 != nullptr)
     {
-        // Ğ´ÎÄ¼şÎ²
+        // å†™æ–‡ä»¶å°¾
         ret = av_write_trailer(ofmt_ctx2);
         if (ret < 0)
         {
-            std::cerr << "av_write_trailer err £º " << av_err2str(ret) << std::endl;
+            std::cerr << "av_write_trailer err ï¼š " << av_err2str(ret) << std::endl;
         }
     }
 #endif // MUXING
 
-    // ¹Ø±ÕÎÄ¼ş
+    // å…³é—­æ–‡ä»¶
     out_yuv.close();
     out_hw.close();
     out_pcm.close();
@@ -870,7 +873,7 @@ END:
     av_file_unmap(buf, size);
 
     // REMUX
-    // ¹Ø±Õio
+    // å…³é—­io
     if (ofmt_ctx != nullptr && !(ofmt_ctx->oformat->flags & AVFMT_NOFILE))
     {
         avio_closep(&ofmt_ctx->pb);
@@ -879,7 +882,7 @@ END:
     ofmt_ctx = nullptr;
 
     // MUXING
-    // ¹Ø±Õio
+    // å…³é—­io
     if (ofmt_ctx2 != nullptr && !(ofmt_ctx2->oformat->flags & AVFMT_NOFILE))
     {
         avio_closep(&ofmt_ctx2->pb);

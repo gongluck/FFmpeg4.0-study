@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright (c) 2013 Stefano Sabatini
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -49,7 +49,8 @@ int main_remuxing(int argc, char **argv)
     AVFormatContext *ifmt_ctx = NULL, *ofmt_ctx = NULL;
     AVPacket pkt;
     const char *in_filename, *out_filename;
-    int ret, i;
+    int ret;
+    unsigned int i;
     int stream_index = 0;
     int *stream_mapping = NULL;
     int stream_mapping_size = 0;

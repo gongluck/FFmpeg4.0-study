@@ -1,4 +1,4 @@
-#include <iostream>
+﻿#include <iostream>
 using namespace std;
 
 extern "C"
@@ -10,6 +10,9 @@ extern "C"
 #pragma comment(lib, "avutil.lib")
 #pragma comment(lib, "avcodec.lib")
 
+#ifdef av_err2str
+#undef av_err2str
+#endif
 char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
 #define av_err2str(errnum) \
     av_make_error_string(av_error, AV_ERROR_MAX_STRING_SIZE, errnum)
@@ -67,7 +70,7 @@ int file2rtmp()
 	cout << "octx create success." << endl;
 
 	//配置输出流
-	for (int i = 0; i < ictx->nb_streams; ++i)
+	for (unsigned int i = 0; i < ictx->nb_streams; ++i)
 	{
 		//创建流
 		AVStream* ostream = avformat_new_stream(octx, avcodec_find_encoder(ictx->streams[i]->codecpar->codec_id));
@@ -118,9 +121,11 @@ int file2rtmp()
 		if (ictx->streams[pkt.stream_index]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
 		{
 			int64_t nowtime = av_gettime() - starttime;
-			int64_t dts = pkt.dts * av_q2d(octx->streams[pkt.stream_index]->time_base) * 1000 * 1000;
-			if(dts > nowtime)
-				/*av_usleep(dts- nowtime)*/;
+			int64_t dts = static_cast<int64_t>(pkt.dts * av_q2d(octx->streams[pkt.stream_index]->time_base) * 1000 * 1000);
+            if (dts > nowtime)
+            {
+                /*av_usleep(dts- nowtime)*/;
+            }
 		}
 		
 		ret = av_interleaved_write_frame(octx, &pkt);
@@ -201,7 +206,7 @@ int rtsp2rtmp()
 	cerr << "octx create success." << endl;
 
 	//配置输出流
-	for (int i = 0; i < ictx->nb_streams; ++i)
+	for (unsigned int i = 0; i < ictx->nb_streams; ++i)
 	{
 		//创建流
 		AVStream* ostream = avformat_new_stream(octx, avcodec_find_encoder(ictx->streams[i]->codecpar->codec_id));
