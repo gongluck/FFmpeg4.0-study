@@ -1,4 +1,4 @@
-#include "common.h"
+ï»¿#include "common.h"
 #include "CDecode.h"
 
 CDecode::~CDecode()
@@ -11,6 +11,7 @@ bool CDecode::set_input(const std::string& input, std::string& err)
 {
     LOCK();
     CHECKSTOP(err);
+    err = "opt succeed.";
     if (input.empty())
     {
         err = "input is empty.";
@@ -19,7 +20,6 @@ bool CDecode::set_input(const std::string& input, std::string& err)
     else
     {
         input_ = input;
-        err = "opt succeed.";
         return true;
     }
 }
@@ -35,9 +35,9 @@ bool CDecode::set_dec_callback(DecFrameCallback cb, void* param, std::string& er
 {
     LOCK();
     CHECKSTOP(err);
+    err = "opt succeed.";
     decframecb_ = cb;
     decframecbparam_ = param;
-    err = "opt succeed.";
     return true;
 }
 
@@ -45,9 +45,9 @@ bool CDecode::set_dec_status_callback(DecStatusCallback cb, void* param, std::st
 {
     LOCK();
     CHECKSTOP(err);
+    err = "opt succeed.";
     decstatuscb_ = cb;
     decstatuscbparam_ = param;
-    err = "opt succeed.";
     return true;
 }
 
@@ -55,6 +55,7 @@ bool CDecode::set_hwdec_type(AVHWDeviceType hwtype, bool trans, std::string& err
 {
     LOCK();
     CHECKSTOP(err);
+    err = "opt succeed.";
     hwtype_ = hwtype;
     trans_ = trans;
     return true;
@@ -64,6 +65,7 @@ bool CDecode::begindecode(std::string& err)
 {
     LOCK();
     CHECKSTOP(err);
+    err = "opt succeed.";
 
     int ret;
 
@@ -85,7 +87,7 @@ bool CDecode::begindecode(std::string& err)
     ret = avformat_find_stream_info(fmtctx_, nullptr);
     CHECKFFRET(ret);
 
-    // ²éÕÒÁ÷
+    // æŸ¥æ‰¾æµ
     AVCodec* vcodec = nullptr;
     ret = av_find_best_stream(fmtctx_, AVMEDIA_TYPE_VIDEO, -1, -1, &vcodec, 0);
     vindex_ = ret;
@@ -110,7 +112,7 @@ bool CDecode::begindecode(std::string& err)
         CHECKFFRETANDCTX(ret, vcodectx_);
         if (hwtype_ != AV_HWDEVICE_TYPE_NONE)
         {
-            // ²éÑ¯Ó²½âÂëÖ§³Ö
+            // æŸ¥è¯¢ç¡¬è§£ç æ”¯æŒ
             for (int i = 0;; i++)
             {
                 const AVCodecHWConfig* config = avcodec_get_hw_config(vcodec, i);
@@ -122,7 +124,7 @@ bool CDecode::begindecode(std::string& err)
                 if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
                     config->device_type == hwtype_)
                 {
-                    // Ó²½âÉÏÏÂÎÄ
+                    // ç¡¬è§£ä¸Šä¸‹æ–‡
                     AVBufferRef* hwbufref = nullptr;
                     ret = av_hwdevice_ctx_create(&hwbufref, hwtype_, nullptr, nullptr, 0);
                     if (ret < 0)
@@ -172,6 +174,7 @@ bool CDecode::begindecode(std::string& err)
 bool CDecode::stopdecode(std::string& err)
 {
     LOCK();
+    err = "opt succeed.";
 
     status_ = STOP;
     if (decodeth_.joinable())
@@ -189,7 +192,6 @@ bool CDecode::stopdecode(std::string& err)
     avformat_close_input(&fmtctx_);
 
     vindex_ = aindex_ = -1;
-    err = "opt succeed.";
 
     return true;
 }
@@ -197,6 +199,8 @@ bool CDecode::stopdecode(std::string& err)
 bool CDecode::seek(int64_t timestamp, int flags, std::string& err)
 {
     LOCK();
+    err = "opt succeed.";
+
     AVRational timebase = { 0 };
     if (vindex_ != -1)
     {
@@ -214,9 +218,9 @@ bool CDecode::decodethread()
 {
     int ret;
     std::string err;
-    FRAMETYPE decodingtype = ERR; // ¼ÇÂ¼µ±Ç°½âÂëÖ¡ÀàĞÍ
+    FRAMETYPE decodingtype = ERR; // è®°å½•å½“å‰è§£ç å¸§ç±»å‹
     AVCodecContext* codectx = nullptr;
-    // ·ÖÅäAVPacketºÍAVFrame
+    // åˆ†é…AVPacketå’ŒAVFrame
     AVPacket* packet = av_packet_alloc();
     AVFrame* frame = av_frame_alloc();
     AVFrame* traframe = av_frame_alloc();
@@ -232,16 +236,16 @@ bool CDecode::decodethread()
         av_frame_free(&traframe);
         return false;
     }
-    // ³õÊ¼»¯packet
+    // åˆå§‹åŒ–packet
     av_init_packet(packet);
 
-    // Ñ­»·¶ÁÊı¾İ½âÂëÊı¾İ
+    // å¾ªç¯è¯»æ•°æ®è§£ç æ•°æ®
     while (true)
     {
         if (status_ != DECODING)
             break;
 
-        // ¶ÁÊı¾İ
+        // è¯»æ•°æ®
         ret = av_read_frame(fmtctx_, packet);
         if (ret < 0)
         {
@@ -250,18 +254,18 @@ bool CDecode::decodethread()
                 status_ = STOP;
                 decstatuscb_(STOP, av_err2str(ret), decstatuscbparam_);
             }
-            break; //ÕâÀïÈÏÎªÊÓÆµ¶ÁÈ¡ÍêÁË
+            break; //è¿™é‡Œè®¤ä¸ºè§†é¢‘è¯»å–å®Œäº†
         }
 
         if (packet->stream_index == vindex_)
         {
-            // ½âÂëÊÓÆµÖ¡
+            // è§£ç è§†é¢‘å¸§
             decodingtype = VIDEO;
             codectx = vcodectx_;
         }
         else if (packet->stream_index == aindex_)
         {
-            // ½âÂëÒôÆµÖ¡
+            // è§£ç éŸ³é¢‘å¸§
             decodingtype = AUDIO;
             codectx = acodectx_;
         }
@@ -271,7 +275,7 @@ bool CDecode::decodethread()
             codectx = nullptr;
         }
 
-        // ¼ì²écodectx
+        // æ£€æŸ¥codectx
         if (codectx == nullptr)
         {
             if (decstatuscb_ != nullptr)
@@ -281,7 +285,7 @@ bool CDecode::decodethread()
             continue;
         }
 
-        // ·¢ËÍ½«Òª½âÂëµÄÊı¾İ
+        // å‘é€å°†è¦è§£ç çš„æ•°æ®
         ret = avcodec_send_packet(codectx, packet);
         if (ret < 0)
         {
@@ -294,16 +298,16 @@ bool CDecode::decodethread()
         }
         while (ret >= 0)
         {
-            // ½ÓÊÕ½âÂëÊı¾İ
+            // æ¥æ”¶è§£ç æ•°æ®
             ret = avcodec_receive_frame(codectx, frame);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             {
-                // ²»ÍêÕû»òÕßEOF
+                // ä¸å®Œæ•´æˆ–è€…EOF
                 break;
             }
             else if (ret < 0)
             {
-                // ÆäËû´íÎó
+                // å…¶ä»–é”™è¯¯
                 if (decstatuscb_ != nullptr)
                 {
                     decstatuscb_(DECODING, av_err2str(ret), decstatuscbparam_);
@@ -312,13 +316,13 @@ bool CDecode::decodethread()
             }
             else
             {
-                // µÃµ½½âÂëÊı¾İ
+                // å¾—åˆ°è§£ç æ•°æ®
                 if (decframecb_ != nullptr)
                 {
-                    if (packet->stream_index == vindex_ // ÊÓÆµÖ¡ 
-                        && hwtype_ != AV_HWDEVICE_TYPE_NONE // Ê¹ÓÃÓ²½â
-                        && frame->format == hwfmt_ // Ó²½â¸ñÊ½
-                        && trans_ // ×ª»»
+                    if (packet->stream_index == vindex_ // è§†é¢‘å¸§ 
+                        && hwtype_ != AV_HWDEVICE_TYPE_NONE // ä½¿ç”¨ç¡¬è§£
+                        && frame->format == hwfmt_ // ç¡¬è§£æ ¼å¼
+                        && trans_ // è½¬æ¢
                         )
                     {
                         ret = av_hwframe_transfer_data(traframe, frame, 0);
@@ -346,15 +350,15 @@ bool CDecode::decodethread()
                             decframecbparam_);
                     }
                 }
-                // ÕâÀïÃ»ÓĞÖ±½Óbreak£¬ÊÇÒòÎª´æÔÚÔÙ´Îµ÷ÓÃavcodec_receive_frameÄÜÄÃµ½ĞÂÊı¾İµÄ¿ÉÄÜ
+                // è¿™é‡Œæ²¡æœ‰ç›´æ¥breakï¼Œæ˜¯å› ä¸ºå­˜åœ¨å†æ¬¡è°ƒç”¨avcodec_receive_frameèƒ½æ‹¿åˆ°æ–°æ•°æ®çš„å¯èƒ½
             }
         }
 
-        // ²»ÔÙÒıÓÃÖ¸ÏòµÄ»º³åÇø
+        // ä¸å†å¼•ç”¨æŒ‡å‘çš„ç¼“å†²åŒº
         av_packet_unref(packet);
     }
 
-    // ÇåÀípacketºÍframe
+    // æ¸…ç†packetå’Œframe
     av_packet_free(&packet);
     av_frame_free(&frame);
     av_frame_free(&traframe);
