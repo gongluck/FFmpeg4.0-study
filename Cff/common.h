@@ -1,4 +1,4 @@
-#ifndef __COMMON_H__
+ï»¿#ifndef __COMMON_H__
 #define __COMMON_H__
 
 #ifdef __cplusplus
@@ -10,7 +10,7 @@ extern "C"
 
 #ifdef __cplusplus
 }
-// C++ÖĞÊ¹ÓÃav_err2strºê
+// C++ä¸­ä½¿ç”¨av_err2strå®
 static char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
 #ifdef av_err2str
 #undef av_err2str
@@ -19,10 +19,20 @@ static char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
     av_make_error_string(av_error, AV_ERROR_MAX_STRING_SIZE, errnum)
 #endif
 
-// µİ¹éËø
+// é€’å½’é”
 #define LOCK() std::lock_guard<std::recursive_mutex> _lock(this->mutex_)
+#define TRYLOCK()\
+if (!this->mutex_.try_lock())\
+{\
+    err = "decoder is busing.";\
+    return false;\
+}
+#define UNLOCK()\
+{\
+    this->mutex_->un_lock();\
+}
 
-// ¼ì²éÍ£Ö¹×´Ì¬
+// æ£€æŸ¥åœæ­¢çŠ¶æ€
 #define CHECKSTOP(err) \
 if(this->status_ != STOP)\
 {\
@@ -36,11 +46,12 @@ if(this->status_ == STOP)\
     return false;\
 }
 
-// ¼ì²éffmpeg·µ»ØÖµ
+// æ£€æŸ¥ffmpegè¿”å›å€¼
 #define CHECKFFRET(ret) \
 if (ret < 0)\
 {\
     err = av_err2str(ret);\
+    this->mutex_.unlock();\
     return false;\
 }
 #define CHECKFFRETANDCTX(ret, codectx) \

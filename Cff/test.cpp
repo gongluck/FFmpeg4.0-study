@@ -1,4 +1,4 @@
-#include "CDecode.h"
+ï»¿#include "CDecode.h"
 #include "CSws.h"
 #include "CSwr.h"
 #include <iostream>
@@ -59,6 +59,11 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, int64_t time
         {
             std::cout << "AV_PIX_FMT_NV12 frame." << std::endl;
         }
+        else if (frame->format == AV_PIX_FMT_BGRA)
+        {
+            static std::ofstream video("out.bgra", std::ios::binary | std::ios::trunc);
+            video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
+        }
         else if (frame->format == AV_PIX_FMT_YUV420P)
         {
             static bool bret = false;
@@ -80,12 +85,12 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, int64_t time
             video.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
             */
 
-            // ½«Êä³ö·­×ª
+            // å°†è¾“å‡ºç¿»è½¬
             g_pointers[0] += g_linesizes[0] * (240 - 1);
             g_linesizes[0] *= -1;
-            // ×ª»»
+            // è½¬æ¢
             int ret = g_sws.scale(frame->data, frame->linesize, 0, frame->height, g_pointers, g_linesizes, err);
-            // »¹Ô­Ö¸Õë£¬ÒÔ±ã¿½±´Êı¾İ
+            // è¿˜åŸæŒ‡é’ˆï¼Œä»¥ä¾¿æ‹·è´æ•°æ®
             g_linesizes[0] *= -1;
             g_pointers[0] -= g_linesizes[0] * (240 - 1);
             video.write(reinterpret_cast<const char*>(g_pointers[0]), g_linesizes[0] * ret);
@@ -109,14 +114,14 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, int64_t time
                 TESTCHECKRET2(bret);
             }
  
-            // ·µ»ØÃ¿¸öÍ¨µÀ(channel)µÄÑù±¾Êı(samples)
+            // è¿”å›æ¯ä¸ªé€šé“(channel)çš„æ ·æœ¬æ•°(samples)
             int ret = g_swr.convert(g_data, g_linesize, (const uint8_t * *)frame->data, frame->nb_samples, err);
-            // »ñÈ¡Ñù±¾¸ñÊ½¶ÔÓ¦µÄÃ¿¸öÑù±¾´óĞ¡(Byte)
+            // è·å–æ ·æœ¬æ ¼å¼å¯¹åº”çš„æ¯ä¸ªæ ·æœ¬å¤§å°(Byte)
             auto size = av_get_bytes_per_sample(g_fmt);
-            // ¿½±´ÒôÆµÊı¾İ
-            for (int i = 0; i < ret; ++i) // Ã¿¸öÑù±¾
+            // æ‹·è´éŸ³é¢‘æ•°æ®
+            for (int i = 0; i < ret; ++i) // æ¯ä¸ªæ ·æœ¬
             {
-                for (int j = 0; j < av_get_channel_layout_nb_channels(g_layout)/* »ñÈ¡²¼¾Ö¶ÔÓ¦µÄÍ¨µÀÊı */; ++j) // Ã¿¸öÍ¨µÀ
+                for (int j = 0; j < av_get_channel_layout_nb_channels(g_layout)/* è·å–å¸ƒå±€å¯¹åº”çš„é€šé“æ•° */; ++j) // æ¯ä¸ªé€šé“
                 {
                     audio.write(reinterpret_cast<const char*>(g_data[j] + size * i), size);
                 }
@@ -130,14 +135,14 @@ int main(int argc, char* argv[])
     std::string err;
     bool ret = false;
 
-    // ·ÖÅäÍ¼ÏñÊı¾İÄÚ´æ
+    // åˆ†é…å›¾åƒæ•°æ®å†…å­˜
     int size = av_image_alloc(g_pointers, g_linesizes, 320, 240, AV_PIX_FMT_RGB24, 1);
 
-    // ·ÖÅäÒôÆµÊı¾İÄÚ´æ
+    // åˆ†é…éŸ³é¢‘æ•°æ®å†…å­˜
     size = av_samples_alloc_array_and_samples(&g_data, &g_linesize, av_get_channel_layout_nb_channels(g_layout), g_rate, g_fmt, 0);
 
     CDecode decode;
-    ret = decode.set_input("in.flv", err);
+    ret = decode.set_input("desktop", err);
     //ret = decode.set_input("rtmp://localhost/live/test", err);
     TESTCHECKRET(ret);
     ret = decode.set_dec_callback(DecFrameCB, &decode, err);
@@ -162,7 +167,7 @@ int main(int argc, char* argv[])
 
     ret = g_sws.unlock_opt(err);
     TESTCHECKRET(ret);
-    // ÇåÀíÍ¼ÏñÊı¾İÄÚ´æ
+    // æ¸…ç†å›¾åƒæ•°æ®å†…å­˜
     if (g_pointers)
     {
         av_freep(&g_pointers[0]);
@@ -171,7 +176,7 @@ int main(int argc, char* argv[])
 
     ret = g_swr.unlock_opt(err);
     TESTCHECKRET(ret);
-    // ÇåÀíÒôÆµÊı¾İÄÚ´æ
+    // æ¸…ç†éŸ³é¢‘æ•°æ®å†…å­˜
     if (g_data)
     {
         av_freep(&g_data[0]);

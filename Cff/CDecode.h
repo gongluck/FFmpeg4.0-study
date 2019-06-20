@@ -1,4 +1,4 @@
-#ifndef __CDECODE_H__
+ï»¿#ifndef __CDECODE_H__
 #define __CDECODE_H__
 
 #ifdef __cplusplus
@@ -7,6 +7,7 @@ extern "C"
 #endif
 
 #include <libavformat/avformat.h>
+#include <libavdevice/avdevice.h>
 
 #ifdef __cplusplus
 }
@@ -21,38 +22,38 @@ class CDecode
 public:
     ~CDecode();
 
-    // ×´Ì¬
+    // çŠ¶æ€
     enum STATUS{STOP, DECODING};
-    // Ö¡ÀàĞÍ
+    // å¸§ç±»å‹
     enum FRAMETYPE {ERR, VIDEO, AUDIO};
-    // ×´Ì¬Í¨Öª»Øµ÷ÉùÃ÷
+    // çŠ¶æ€é€šçŸ¥å›è°ƒå£°æ˜
     typedef void (*DecStatusCallback)(STATUS status, std::string err, void* param);
-    // ½âÂëÖ¡»Øµ÷ÉùÃ÷
+    // è§£ç å¸§å›è°ƒå£°æ˜
     typedef void (*DecFrameCallback)(const AVFrame* frame, FRAMETYPE frametype, int64_t timestamp, void* param);
 
-    // ÉèÖÃÊäÈë
+    // è®¾ç½®è¾“å…¥
     bool set_input(const std::string& input, std::string& err);
-    // »ñÈ¡ÊäÈë
+    // è·å–è¾“å…¥
     const std::string& get_input(std::string& err);
 
-    // ÉèÖÃ½âÂëÖ¡»Øµ÷ 
+    // è®¾ç½®è§£ç å¸§å›è°ƒ 
     bool set_dec_callback(DecFrameCallback cb, void* param, std::string& err);
-    // ÉèÖÃ½âÂë×´Ì¬±ä»¯»Øµ÷
+    // è®¾ç½®è§£ç çŠ¶æ€å˜åŒ–å›è°ƒ
     bool set_dec_status_callback(DecStatusCallback cb, void* param, std::string& err);
 
-    // ÉèÖÃÓ²½â
+    // è®¾ç½®ç¡¬è§£
     bool set_hwdec_type(AVHWDeviceType hwtype, bool trans, std::string& err);
 
-    // ¿ªÊ¼½âÂë
+    // å¼€å§‹è§£ç 
     bool begindecode(std::string& err);
-    // Í£Ö¹½âÂë
+    // åœæ­¢è§£ç 
     bool stopdecode(std::string& err);
 
-    // Ìø×ªµ½Ö¸¶¨Ãë
+    // è·³è½¬åˆ°æŒ‡å®šç§’
     bool seek(int64_t timestamp, int flags, std::string& err);
 
 private:
-    // ½âÂëÏß³Ì
+    // è§£ç çº¿ç¨‹
     bool decodethread();
 
 private:

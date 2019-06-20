@@ -81,7 +81,14 @@ bool CDecode::begindecode(std::string& err)
         return false;
     }
 
-    ret = avformat_open_input(&fmtctx_, input_.c_str(), nullptr, nullptr);
+    AVInputFormat* fmt = nullptr;
+    AVDictionary* dic = nullptr;
+    if (input_ == "desktop")
+    {
+        avdevice_register_all();
+        fmt = av_find_input_format("gdigrab");
+    }
+    ret = avformat_open_input(&fmtctx_, input_.c_str(), fmt, &dic);
     CHECKFFRET(ret);
 
     ret = avformat_find_stream_info(fmtctx_, nullptr);
@@ -198,7 +205,7 @@ bool CDecode::stopdecode(std::string& err)
 
 bool CDecode::seek(int64_t timestamp, int flags, std::string& err)
 {
-    LOCK();
+    TRYLOCK();
     err = "opt succeed.";
 
     AVRational timebase = { 0 };
