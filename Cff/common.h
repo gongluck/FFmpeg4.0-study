@@ -51,7 +51,6 @@ if(this->status_ == STOP)\
 if (ret < 0)\
 {\
     err = av_err2str(ret);\
-    this->mutex_.unlock();\
     return false;\
 }
 #define CHECKFFRETANDCTX(ret, codectx) \

@@ -217,8 +217,17 @@ bool CDecode::seek(int64_t timestamp, int flags, std::string& err)
     {
         timebase = fmtctx_->streams[aindex_]->time_base;
     }
-    CHECKFFRET(av_seek_frame(fmtctx_, -1, av_rescale_q_rnd(timestamp, { 1, 1 }, timebase, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), flags));
-    return true;
+    int ret = av_seek_frame(fmtctx_, -1, av_rescale_q_rnd(timestamp, { 1, 1 }, timebase, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), flags);
+    this->mutex_.unlock();
+    if (ret < 0)
+    {
+        err = av_err2str(ret);
+        return false;
+    }
+    else
+    {
+        return true;
+    }
 }
 
 bool CDecode::decodethread()
