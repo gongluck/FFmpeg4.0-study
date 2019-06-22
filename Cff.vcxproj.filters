@@ -27,6 +27,9 @@
     <ClCompile Include="Cff\CSwr.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Cff\CDemux.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Cff\CDecode.h">
@@ -39,6 +42,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Cff\CSwr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Cff\CDemux.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
