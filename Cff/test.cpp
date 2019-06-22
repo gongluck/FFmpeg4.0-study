@@ -182,7 +182,7 @@ int main(int argc, char* argv[])
     ret = decode.set_dec_callback(DecFrameCB, &decode, err);
     TESTCHECKRET(ret);
     
-    ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, false, err);
+    ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true, err);
     TESTCHECKRET(ret);
 
     int i = 0;

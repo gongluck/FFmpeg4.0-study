@@ -48,6 +48,41 @@ bool CDecode::copy_param(const AVCodecParameters* par, std::string& err)
         err = av_err2str(ret);
         return false;
     }
+    if (hwtype_ != AV_HWDEVICE_TYPE_NONE)
+    {
+        // 查询硬解码支持
+        for (int i = 0;; i++)
+        {
+            const AVCodecHWConfig* config = avcodec_get_hw_config(codec, i);
+            if (config == nullptr)
+            {
+                err = codec->name + std::string(" not support ") + av_hwdevice_get_type_name(hwtype_);
+                break;
+            }
+            if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+                config->device_type == hwtype_)
+            {
+                // 硬解上下文
+                AVBufferRef* hwbufref = nullptr;
+                ret = av_hwdevice_ctx_create(&hwbufref, hwtype_, nullptr, nullptr, 0);
+                if (ret < 0)
+                {
+                    err = av_err2str(ret);
+                }
+                else
+                {
+                    codectx_->hw_device_ctx = av_buffer_ref(hwbufref);
+                    if (codectx_->hw_device_ctx == nullptr)
+                    {
+                        err = "av_buffer_ref(hwbufref) return nullptr.";
+                    }
+                    av_buffer_unref(&hwbufref);
+                    hwfmt_ = config->pix_fmt;
+                }
+                break;
+            }
+        }
+    }
     ret = avcodec_open2(codectx_, codec, NULL);
     if (ret < 0)
     {
