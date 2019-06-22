@@ -99,7 +99,13 @@ void DecFrameCB(const AVFrame* frame, CDecode::FRAMETYPE frametype, int64_t time
     else if (frametype == CDecode::FRAMETYPE::AUDIO)
     {
         std::cout << "a frame pts : " << frame->pts << std::endl;
-        if (frame->format == AV_SAMPLE_FMT_FLTP)
+        if (frame->format == frame->format == AV_SAMPLE_FMT_S16)
+        {
+            static std::ofstream audio("outs16.pcm", std::ios::binary | std::ios::trunc);
+            // 非平面格式，就直接拷贝data[0]
+            audio.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0]);
+        }
+        else if (frame->format == AV_SAMPLE_FMT_FLTP)
         {
             static bool bret = false;
             static std::ofstream audio("out.pcm", std::ios::binary | std::ios::trunc);
@@ -142,7 +148,18 @@ int main(int argc, char* argv[])
     size = av_samples_alloc_array_and_samples(&g_data, &g_linesize, av_get_channel_layout_nb_channels(g_layout), g_rate, g_fmt, 0);
 
     CDecode decode;
-    ret = decode.set_input("desktop", err);
+
+    decode.device_register_all(err);
+    TESTCHECKRET(ret);
+    //ret = decode.set_input_format("gdigrab", err); //采集摄像头
+    ret = decode.set_input_format("dshow", err); //采集声卡
+    TESTCHECKRET(ret);
+    ret = decode.set_dic_opt("framerate", "15", err);
+    TESTCHECKRET(ret);
+
+    //ret = decode.set_input("desktop", err);
+    ret = decode.set_input("audio=virtual-audio-capturer", err);
+    //ret = decode.set_input("in.flv", err);
     //ret = decode.set_input("rtmp://localhost/live/test", err);
     TESTCHECKRET(ret);
     ret = decode.set_dec_callback(DecFrameCB, &decode, err);

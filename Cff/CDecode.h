@@ -52,6 +52,15 @@ public:
     // 跳转到指定秒
     bool seek(int64_t timestamp, int flags, std::string& err);
 
+    // 启用设备采集
+    bool device_register_all(std::string& err);
+    // 设置输入格式
+    bool set_input_format(std::string fmt, std::string& err);
+    // 设置附加参数
+    bool set_dic_opt(std::string key, std::string value, std::string& err);
+    // 清理设置
+    bool free_opt(std::string& err);
+
 private:
     // 解码线程
     bool decodethread();
@@ -74,6 +83,8 @@ private:
     AVFormatContext* fmtctx_ = nullptr;
     AVCodecContext* vcodectx_ = nullptr;
     AVCodecContext* acodectx_ = nullptr;
+    AVInputFormat* fmt_ = nullptr;
+    AVDictionary* dic_ = nullptr;
 
     AVHWDeviceType hwtype_ = AV_HWDEVICE_TYPE_NONE;
     AVPixelFormat hwfmt_ = AV_PIX_FMT_NONE;

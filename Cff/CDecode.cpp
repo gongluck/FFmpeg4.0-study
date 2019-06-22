@@ -5,6 +5,7 @@ CDecode::~CDecode()
 {
     std::string err;
     stopdecode(err);
+    free_opt(err);
 }
 
 bool CDecode::set_input(const std::string& input, std::string& err)
@@ -80,15 +81,7 @@ bool CDecode::begindecode(std::string& err)
         err = "avformat_alloc_context() return nullptr.";
         return false;
     }
-
-    AVInputFormat* fmt = nullptr;
-    AVDictionary* dic = nullptr;
-    if (input_ == "desktop")
-    {
-        avdevice_register_all();
-        fmt = av_find_input_format("gdigrab");
-    }
-    ret = avformat_open_input(&fmtctx_, input_.c_str(), fmt, &dic);
+    ret = avformat_open_input(&fmtctx_, input_.c_str(), fmt_, &dic_);
     CHECKFFRET(ret);
 
     ret = avformat_find_stream_info(fmtctx_, nullptr);
@@ -155,6 +148,10 @@ bool CDecode::begindecode(std::string& err)
         ret = avcodec_open2(vcodectx_, vcodec, nullptr);
         CHECKFFRETANDCTX(ret, vcodectx_);
     }
+    else
+    {
+        vindex_ = -1;
+    }
     if (aindex_ >= 0)
     {
         acodectx_ = avcodec_alloc_context3(acodec);
@@ -167,6 +164,10 @@ bool CDecode::begindecode(std::string& err)
         CHECKFFRETANDCTX2(ret, vcodectx_, acodectx_);
         ret = avcodec_open2(acodectx_, acodec, nullptr);
         CHECKFFRETANDCTX2(ret, vcodectx_, acodectx_);
+    }
+    else
+    {
+        aindex_ = -1;
     }
 
     av_dump_format(fmtctx_, 0, input_.c_str(), 0);
@@ -197,7 +198,6 @@ bool CDecode::stopdecode(std::string& err)
         avcodec_free_context(&acodectx_);
     }
     avformat_close_input(&fmtctx_);
-
     vindex_ = aindex_ = -1;
 
     return true;
@@ -228,6 +228,64 @@ bool CDecode::seek(int64_t timestamp, int flags, std::string& err)
     {
         return true;
     }
+}
+
+bool CDecode::device_register_all(std::string& err)
+{
+    LOCK();
+    CHECKSTOP(err);
+    err = "opt succeed.";
+    avdevice_register_all();
+    return true;
+}
+
+bool CDecode::set_input_format(std::string fmt, std::string& err)
+{
+    LOCK();
+    CHECKSTOP(err);
+    err = "opt succeed.";
+    if (fmt.empty())
+    {
+        err = "input is empty.";
+        return false;
+    }
+    else
+    {
+        fmt_ = av_find_input_format(fmt.c_str());
+        if (fmt_ == nullptr)
+        {
+            err = "can not find fmt " + fmt;
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+    }
+}
+
+bool CDecode::set_dic_opt(std::string key, std::string value, std::string& err)
+{
+    LOCK();
+    CHECKSTOP(err);
+    err = "opt succeed.";
+    if (key.empty() || value.empty())
+    {
+        err = "input is empty.";
+        return false;
+    }
+    CHECKFFRET(av_dict_set(&dic_, key.c_str(), value.c_str(), 0));
+    return true;
+}
+
+bool CDecode::free_opt(std::string& err)
+{
+    LOCK();
+    CHECKSTOP(err);
+    err = "opt succeed.";
+    av_dict_free(&dic_);
+    fmt_ = nullptr;
+    return true;
 }
 
 bool CDecode::decodethread()
