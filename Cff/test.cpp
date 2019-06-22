@@ -154,7 +154,7 @@ int main(int argc, char* argv[])
     //ret = decode.set_input_format("gdigrab", err); //采集摄像头
     ret = decode.set_input_format("dshow", err); //采集声卡
     TESTCHECKRET(ret);
-    ret = decode.set_dic_opt("framerate", "15", err);
+    ret = decode.set_dic_opt("framerate", "15", err); //"audio=virtual-audio-capturer"这个不设置帧率得到的音频有问题
     TESTCHECKRET(ret);
 
     //ret = decode.set_input("desktop", err);
