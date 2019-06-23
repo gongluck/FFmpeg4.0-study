@@ -20,6 +20,7 @@ extern "C"
 class CDemux
 {
 public:
+    ~CDemux();
     // 状态
     enum STATUS { STOP, DEMUXING };
     // 状态通知回调声明

@@ -1,11 +1,19 @@
 ﻿#include "common.h"
 #include "CDemux.h"
 
+CDemux::~CDemux()
+{
+    std::string err;
+    stopdemux(err);
+    free_opt(err);
+}
+
 bool CDemux::set_input(const std::string& input, std::string& err)
 {
     LOCK();
     CHECKSTOP(err);
     err = "opt succeed.";
+
     if (input.empty())
     {
         err = "input is empty.";
@@ -30,8 +38,10 @@ bool CDemux::set_demux_callback(DemuxPacketCallback cb, void* param, std::string
     LOCK();
     CHECKSTOP(err);
     err = "opt succeed.";
+
     demuxpacketcb_ = cb;
     demuxpacketcbparam_ = param;
+
     return true;
 }
 
@@ -40,8 +50,10 @@ bool CDemux::set_demux_status_callback(DemuxStatusCallback cb, void* param, std:
     LOCK();
     CHECKSTOP(err);
     err = "opt succeed.";
+
     demuxstatuscb_ = cb;
     demuxstatuscbparam_ = param;
+
     return true;
 }
 
@@ -50,7 +62,7 @@ bool CDemux::openinput(std::string& err)
     LOCK();
     CHECKSTOP(err);
     err = "opt succeed.";
-    int ret;
+    int ret = 0;
 
     if (!stopdemux(err))
     {
@@ -167,7 +179,7 @@ int CDemux::get_steam_index(AVMediaType type, std::string& err)
     err = "opt succeed.";
 
     int ret = av_find_best_stream(fmtctx_, type, -1, -1, nullptr, 0);
-    this->mutex_.unlock();
+    UNLOCK();
     if (ret < 0)
     {
         err = av_err2str(ret);
@@ -181,23 +193,19 @@ int CDemux::get_steam_index(AVMediaType type, std::string& err)
 
 const AVCodecParameters* CDemux::get_steam_par(int index, std::string& err)
 {
+    TRYLOCK();
     const AVCodecParameters* par = nullptr;
     err = "opt succeed.";
 
-    if (!this->mutex_.try_lock())
+    if (index >= fmtctx_->nb_streams || index < 0)
     {
-        err = "decoder is busing.";
-    }
-    else if (index >= fmtctx_->nb_streams || index < 0)
-    {
-        err = "stream index err";
-        this->mutex_.unlock();
+        err = "stream index err.";
     }
     else
     {
         par = fmtctx_->streams[index]->codecpar;
-        this->mutex_.unlock();
     }
+    UNLOCK();
 
     return par;
 }
@@ -208,7 +216,7 @@ bool CDemux::seek(int64_t timestamp, int index, int flags, std::string& err)
     err = "opt succeed.";
 
     int ret = av_seek_frame(fmtctx_, index, av_rescale_q_rnd(timestamp, { 1, 1 }, fmtctx_->streams[index]->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), flags);
-    this->mutex_.unlock();
+    UNLOCK();
     if (ret < 0)
     {
         err = av_err2str(ret);
@@ -225,7 +233,9 @@ bool CDemux::device_register_all(std::string& err)
     LOCK();
     CHECKSTOP(err);
     err = "opt succeed.";
+
     avdevice_register_all();
+
     return true;
 }
 
@@ -234,6 +244,7 @@ bool CDemux::set_input_format(std::string fmt, std::string& err)
     LOCK();
     CHECKSTOP(err);
     err = "opt succeed.";
+
     if (fmt.empty())
     {
         err = "input is empty.";
@@ -247,11 +258,9 @@ bool CDemux::set_input_format(std::string fmt, std::string& err)
             err = "can not find fmt " + fmt;
             return false;
         }
-        else
-        {
-            return true;
-        }
     }
+
+    return true;
 }
 
 bool CDemux::set_dic_opt(std::string key, std::string value, std::string& err)
@@ -259,12 +268,15 @@ bool CDemux::set_dic_opt(std::string key, std::string value, std::string& err)
     LOCK();
     CHECKSTOP(err);
     err = "opt succeed.";
+
     if (key.empty() || value.empty())
     {
         err = "input is empty.";
         return false;
     }
+
     CHECKFFRET(av_dict_set(&dic_, key.c_str(), value.c_str(), 0));
+
     return true;
 }
 
@@ -273,7 +285,9 @@ bool CDemux::free_opt(std::string& err)
     LOCK();
     CHECKSTOP(err);
     err = "opt succeed.";
+
     av_dict_free(&dic_);
     fmt_ = nullptr;
+
     return true;
 }

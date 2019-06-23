@@ -207,11 +207,15 @@ int main(int argc, char* argv[])
         {
             ret = decode.copy_param(demux.get_steam_par(vindex, err), err);
             TESTCHECKRET(ret);
+            ret = decode.codec_open(err);
+            TESTCHECKRET(ret);
         }
         aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
         if (aindex != -1)
         {
             ret = decode2.copy_param(demux.get_steam_par(aindex, err), err);
+            TESTCHECKRET(ret);
+            ret = decode.codec_open(err);
             TESTCHECKRET(ret);
         }
         ret = demux.begindemux(err);

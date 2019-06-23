@@ -29,7 +29,7 @@ if (!this->mutex_.try_lock())\
 }
 #define UNLOCK()\
 {\
-    this->mutex_->un_lock();\
+    this->mutex_.unlock();\
 }
 
 // 检查停止状态
@@ -50,21 +50,6 @@ if(this->status_ == STOP)\
 #define CHECKFFRET(ret) \
 if (ret < 0)\
 {\
-    err = av_err2str(ret);\
-    return false;\
-}
-#define CHECKFFRETANDCTX(ret, codectx) \
-if (ret < 0)\
-{\
-    avcodec_free_context(&codectx);\
-    err = av_err2str(ret);\
-    return false;\
-}
-#define CHECKFFRETANDCTX2(ret, codectx1, codectx2) \
-if (ret < 0)\
-{\
-    avcodec_free_context(&codectx1);\
-    avcodec_free_context(&codectx2);\
     err = av_err2str(ret);\
     return false;\
 }

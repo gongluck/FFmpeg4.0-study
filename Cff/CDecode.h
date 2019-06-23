@@ -18,8 +18,7 @@ extern "C"
 class CDecode
 {
 public:
-    // 状态
-    enum STATUS{STOP, DECODING};
+    ~CDecode();
     // 解码帧回调声明
     typedef void (*DecFrameCallback)(const AVFrame* frame, void* param);
 
@@ -30,13 +29,20 @@ public:
     bool set_hwdec_type(AVHWDeviceType hwtype, bool trans, std::string& err);
 
     // 设置解码器
+    bool set_codeid(AVCodecID id, std::string& err);
     bool copy_param(const AVCodecParameters* par, std::string& err);
 
-    // 开始解码
+    // 打开解码器
+    bool codec_open(std::string& err);
+
+    // 解码
     bool decode(const AVPacket* packet, std::string& err);
+    bool decode(const void* data, uint32_t size, std::string& err);
+
+    // 清理资源
+    bool clean_opt(std::string& err);
 
 private:
-    STATUS status_ = STOP;
     std::recursive_mutex mutex_;
 
     DecFrameCallback decframecb_ = nullptr;
@@ -44,8 +50,11 @@ private:
 
     //ffmpeg
     AVCodecContext* codectx_ = nullptr;
+    AVCodec* codec_ = nullptr;
+    AVCodecParserContext* par_ = nullptr;
     AVHWDeviceType hwtype_ = AV_HWDEVICE_TYPE_NONE;
     AVPixelFormat hwfmt_ = AV_PIX_FMT_NONE;
+    AVPacket pkt_;
     bool trans_ = false;
 };
 
