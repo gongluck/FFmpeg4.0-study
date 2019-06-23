@@ -5,6 +5,12 @@
 #include <iostream>
 #include <fstream>
 
+CDemux g_demux;
+CDecode g_decode;
+CDecode g_decode2;
+int g_vindex = -1;
+int g_aindex = -1;
+
 CSws g_sws;
 uint8_t* g_pointers[4] = { 0 };
 int g_linesizes[4] = { 0 };
@@ -30,12 +36,6 @@ if(!ret)\
     return;\
 }
 
-CDemux demux;
-CDecode decode;
-CDecode decode2;
-int vindex = -1;
-int aindex = -1;
-
 void DecStatusCB(CDemux::STATUS status, std::string err, void* param)
 {
     std::cout << std::this_thread::get_id() << " got a status " << status << " " << err << std::endl;
@@ -48,17 +48,17 @@ void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
         " timestamp : " << timestamp << std::endl;
     std::string err;
     bool ret;
-    if (packet->stream_index == vindex)
+    if (packet->stream_index == g_vindex)
     {
-        ret = decode.decode(packet, err);
+        ret = g_decode.decode(packet, err);
         if (!ret)
         {
             std::cout << "deocde v err : " << err << std::endl;
         }
     }
-    else if (packet->stream_index == aindex)
+    else if (packet->stream_index == g_aindex)
     {
-        ret = decode2.decode(packet, err);
+        ret = g_decode2.decode(packet, err);
         if (!ret)
         {
             std::cout << "deocde a err : " << err << std::endl;
@@ -66,7 +66,7 @@ void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
     }
     if (timestamp > 10)
     {
-        demux.seek(5, packet->stream_index, AVSEEK_FLAG_ANY, err);
+        g_demux.seek(5, packet->stream_index, AVSEEK_FLAG_ANY, err);
     }
 }
 
@@ -95,7 +95,12 @@ void DecFrameCB(const AVFrame* frame, void* param)
     }
     else if (frame->format == AV_PIX_FMT_YUV420P)
     {
-        static bool bret = false;
+        static std::ofstream video("out.yuv", std::ios::binary | std::ios::trunc);
+        video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
+        video.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
+        video.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
+        
+        /*static bool bret = false;
         static std::ofstream video("out.rgb", std::ios::binary | std::ios::trunc);
         static int i = 0;
         if (i++ == 0)
@@ -106,23 +111,16 @@ void DecFrameCB(const AVFrame* frame, void* param)
             TESTCHECKRET2(bret);
             bret = g_sws.lock_opt(err);
             TESTCHECKRET2(bret);
-        }
-
-        /*
-        video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
-        video.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
-        video.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
-        */
-
+        }*/
         // 将输出翻转
-        g_pointers[0] += g_linesizes[0] * (240 - 1);
-        g_linesizes[0] *= -1;
+        //g_pointers[0] += g_linesizes[0] * (240 - 1);
+        //g_linesizes[0] *= -1;
         // 转换
-        int ret = g_sws.scale(frame->data, frame->linesize, 0, frame->height, g_pointers, g_linesizes, err);
+        //int ret = g_sws.scale(frame->data, frame->linesize, 0, frame->height, g_pointers, g_linesizes, err);
         // 还原指针，以便拷贝数据
-        g_linesizes[0] *= -1;
-        g_pointers[0] -= g_linesizes[0] * (240 - 1);
-        video.write(reinterpret_cast<const char*>(g_pointers[0]), g_linesizes[0] * ret);
+        //g_linesizes[0] *= -1;
+        //g_pointers[0] -= g_linesizes[0] * (240 - 1);
+        //video.write(reinterpret_cast<const char*>(g_pointers[0]), g_linesizes[0] * ret);
     }
     else if (frame->format == AV_SAMPLE_FMT_S16)
     {
@@ -160,7 +158,7 @@ void DecFrameCB(const AVFrame* frame, void* param)
     }
 }
 
-int main(int argc, char* argv[])
+int main1(int argc, char* argv[])
 {
     std::string err;
     bool ret = false;
@@ -178,53 +176,53 @@ int main(int argc, char* argv[])
     //TESTCHECKRET(ret);
     //ret = demux.set_dic_opt("framerate", "15", err); //"audio=virtual-audio-capturer"这个不设置帧率得到的音频有问题
     //TESTCHECKRET(ret);
-    ret = demux.set_demux_callback(DemuxPacketCB, nullptr, err);
+    ret = g_demux.set_demux_callback(DemuxPacketCB, nullptr, err);
     TESTCHECKRET(ret);
-    ret = demux.set_demux_status_callback(DecStatusCB, nullptr, err);
+    ret = g_demux.set_demux_status_callback(DecStatusCB, nullptr, err);
     TESTCHECKRET(ret);
 
     //ret = demux.set_input("desktop", err);
     //ret = demux.set_input("audio=virtual-audio-capturer", err);
-    ret = demux.set_input("in.flv", err);
+    ret = g_demux.set_input("in.flv", err);
     //ret = demux.set_input("rtmp://localhost/live/test", err);
     TESTCHECKRET(ret);
-    ret = decode.set_dec_callback(DecFrameCB, &decode, err);
+    ret = g_decode.set_dec_callback(DecFrameCB, &g_decode, err);
     TESTCHECKRET(ret);
     
     //ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true, err);
     //TESTCHECKRET(ret);
 
-    ret = decode2.set_dec_callback(DecFrameCB, &decode2, err);
+    ret = g_decode2.set_dec_callback(DecFrameCB, &g_decode2, err);
     TESTCHECKRET(ret);
 
     int i = 0;
     while (i++ < 5)
     {
-        ret = demux.openinput(err);
+        ret = g_demux.openinput(err);
         TESTCHECKRET(ret);
-        vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
-        if (vindex != -1)
+        g_vindex = g_demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+        if (g_vindex != -1)
         {
-            ret = decode.copy_param(demux.get_steam_par(vindex, err), err);
+            ret = g_decode.copy_param(g_demux.get_steam_par(g_vindex, err), err);
             TESTCHECKRET(ret);
-            ret = decode.codec_open(err);
+            ret = g_decode.codec_open(err);
             TESTCHECKRET(ret);
         }
-        aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
-        if (aindex != -1)
+        g_aindex = g_demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+        if (g_aindex != -1)
         {
-            ret = decode2.copy_param(demux.get_steam_par(aindex, err), err);
+            ret = g_decode2.copy_param(g_demux.get_steam_par(g_aindex, err), err);
             TESTCHECKRET(ret);
-            ret = decode.codec_open(err);
+            ret = g_decode.codec_open(err);
             TESTCHECKRET(ret);
         }
-        ret = demux.begindemux(err);
+        ret = g_demux.begindemux(err);
         TESTCHECKRET(ret);
 
         std::cout << "input to stop decoding." << std::endl;
         getchar();
 
-        ret = demux.stopdemux(err);
+        ret = g_demux.stopdemux(err);
         TESTCHECKRET(ret);
     }
 
@@ -245,6 +243,32 @@ int main(int argc, char* argv[])
         av_freep(&g_data[0]);
     }
     av_freep(&g_data);
+
+    return 0;
+}
+
+// 解码h264文件
+int main()
+{
+    bool ret = false;
+    std::string err;
+    std::ifstream h264("in.h264", std::ios::binary);
+    char buf[1024] = { 0 };
+    CDecode dech264;
+
+    ret = dech264.set_dec_callback(DecFrameCB, &dech264, err);
+    TESTCHECKRET(ret);
+    ret = dech264.set_codeid(AV_CODEC_ID_H264, err);
+    TESTCHECKRET(ret);
+    ret = dech264.codec_open(err);
+    TESTCHECKRET(ret);
+
+    while (!h264.eof())
+    {
+        h264.read(buf, sizeof(buf));
+        ret = dech264.decode(buf, sizeof(buf), err);
+        TESTCHECKRET(ret);
+    }
 
     return 0;
 }

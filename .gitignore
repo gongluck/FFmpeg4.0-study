@@ -6,7 +6,7 @@ tmp
 *.rgb
 *.yuv
 *.pcm
-*.h264
+out.h264
 *.mp3
 *.mp4
 *.db

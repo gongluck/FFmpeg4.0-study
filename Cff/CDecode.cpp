@@ -252,7 +252,7 @@ bool CDecode::decode(const void* data, uint32_t size, std::string& err)
     int pos = 0;
     while (size > 0) 
     {
-        ret = av_parser_parse2(par_, codectx_, &pkt_.data, &pkt_.size, static_cast<const uint8_t*>(data), size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+        ret = av_parser_parse2(par_, codectx_, &pkt_.data, &pkt_.size, static_cast<const uint8_t*>(data)+pos, size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
         CHECKFFRET(ret);
         pos += ret;
         size -= ret;
