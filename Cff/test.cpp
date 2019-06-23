@@ -32,6 +32,7 @@ if(!ret)\
 
 CDemux demux;
 CDecode decode;
+CDecode decode2;
 int vindex = -1;
 int aindex = -1;
 
@@ -52,7 +53,15 @@ void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
         ret = decode.decode(packet, err);
         if (!ret)
         {
-            std::cout << "deocde err : " << err << std::endl;
+            std::cout << "deocde v err : " << err << std::endl;
+        }
+    }
+    else if (packet->stream_index == aindex)
+    {
+        ret = decode2.decode(packet, err);
+        if (!ret)
+        {
+            std::cout << "deocde a err : " << err << std::endl;
         }
     }
     if (timestamp > 10)
@@ -115,7 +124,7 @@ void DecFrameCB(const AVFrame* frame, void* param)
         g_pointers[0] -= g_linesizes[0] * (240 - 1);
         video.write(reinterpret_cast<const char*>(g_pointers[0]), g_linesizes[0] * ret);
     }
-    else if (frame->format == frame->format == AV_SAMPLE_FMT_S16)
+    else if (frame->format == AV_SAMPLE_FMT_S16)
     {
         static std::ofstream audio("outs16.pcm", std::ios::binary | std::ios::trunc);
         // 非平面格式，就直接拷贝data[0]
@@ -182,20 +191,29 @@ int main(int argc, char* argv[])
     ret = decode.set_dec_callback(DecFrameCB, &decode, err);
     TESTCHECKRET(ret);
     
-    ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true, err);
+    //ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true, err);
+    //TESTCHECKRET(ret);
+
+    ret = decode2.set_dec_callback(DecFrameCB, &decode2, err);
     TESTCHECKRET(ret);
 
     int i = 0;
-    while (i++ < 1)
+    while (i++ < 5)
     {
         ret = demux.openinput(err);
         TESTCHECKRET(ret);
         vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
         if (vindex != -1)
         {
-            decode.copy_param(demux.get_steam_par(vindex, err), err);
+            ret = decode.copy_param(demux.get_steam_par(vindex, err), err);
+            TESTCHECKRET(ret);
         }
         aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+        if (aindex != -1)
+        {
+            ret = decode2.copy_param(demux.get_steam_par(aindex, err), err);
+            TESTCHECKRET(ret);
+        }
         ret = demux.begindemux(err);
         TESTCHECKRET(ret);
 

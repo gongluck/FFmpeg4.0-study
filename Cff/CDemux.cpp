@@ -171,8 +171,12 @@ int CDemux::get_steam_index(AVMediaType type, std::string& err)
     if (ret < 0)
     {
         err = av_err2str(ret);
+        return -1;
     }
-    return ret;
+    else
+    {
+        return ret;
+    }
 } 
 
 const AVCodecParameters* CDemux::get_steam_par(int index, std::string& err)
