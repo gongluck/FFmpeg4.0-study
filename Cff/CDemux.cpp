@@ -197,7 +197,7 @@ const AVCodecParameters* CDemux::get_steam_par(int index, std::string& err)
     const AVCodecParameters* par = nullptr;
     err = "opt succeed.";
 
-    if (index >= fmtctx_->nb_streams || index < 0)
+    if (index < 0 || static_cast<unsigned int>(index) >= fmtctx_->nb_streams)
     {
         err = "stream index err.";
     }

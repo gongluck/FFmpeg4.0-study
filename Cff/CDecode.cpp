@@ -270,7 +270,6 @@ bool CDecode::decode(const void* data, uint32_t size, std::string& err)
 bool CDecode::clean_opt(std::string& err)
 {
     LOCK();
-    int ret;
     err = "opt succeed.";
 
     codec_ = nullptr;
