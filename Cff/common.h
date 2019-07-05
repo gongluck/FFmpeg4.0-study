@@ -1,4 +1,16 @@
-﻿#ifndef __COMMON_H__
+﻿/*******************************************************************
+*  Copyright(c) 2019
+*  All rights reserved.
+*
+*  文件名称:    common.h
+*  简要描述:    通用
+*
+*  作者:  gongluck
+*  说明:
+*
+*******************************************************************/
+
+#ifndef __COMMON_H__
 #define __COMMON_H__
 
 #ifdef __cplusplus
@@ -24,7 +36,7 @@ static char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
 #define TRYLOCK()\
 if (!this->mutex_.try_lock())\
 {\
-    err = "decoder is busing.";\
+    err = "it is busing.";\
     return false;\
 }
 #define UNLOCK()\

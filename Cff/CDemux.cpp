@@ -1,4 +1,16 @@
-﻿#include "common.h"
+﻿/*******************************************************************
+*  Copyright(c) 2019
+*  All rights reserved.
+*
+*  文件名称:    CDemux.cpp
+*  简要描述:    解封装
+*
+*  作者:  gongluck
+*  说明:
+*
+*******************************************************************/
+
+#include "common.h"
 #include "CDemux.h"
 
 CDemux::~CDemux()
@@ -64,11 +76,7 @@ bool CDemux::openinput(std::string& err)
     err = "opt succeed.";
     int ret = 0;
 
-    if (!stopdemux(err))
-    {
-        return false;
-    }
-
+    avformat_close_input(&fmtctx_);
     fmtctx_ = avformat_alloc_context();
     if (fmtctx_ == nullptr)
     {
@@ -119,56 +127,132 @@ bool CDemux::demuxthread()
     int ret;
     std::string err;
 
-    if (fmtctx_ == nullptr && demuxstatuscb_ != nullptr)
-    {
-        status_ = STOP;
-        demuxstatuscb_(STOP, "fmtctx is nullptr", demuxstatuscbparam_);
-        return false;
-    }
-
-    // 分配AVPacket
     AVPacket* packet = av_packet_alloc();
-    if (packet == nullptr)
+    const AVBitStreamFilter* bsf = nullptr;
+    AVBSFContext* bsfctx = nullptr;
+    AVCodecParameters* codecpar = nullptr;
+    int vindex = -1;
+    do
     {
-        if (demuxstatuscb_ != nullptr)
+        if (fmtctx_ == nullptr)
         {
-            status_ = STOP;
-            demuxstatuscb_(STOP, "av_packet_alloc() or av_frame_alloc() return nullptr.", demuxstatuscbparam_);
-        }
-        av_packet_free(&packet);
-        return false;
-    }
-    // 初始化packet
-    av_init_packet(packet);
-
-    // 循环读数据解码数据
-    while (true)
-    {
-        if (status_ != DEMUXING)
+            err = "fmtctx is nullptr.";
             break;
-
-        // 读数据
-        ret = av_read_frame(fmtctx_, packet);
-        if (ret < 0)
+        }
+        else if (packet == nullptr)
         {
-            if (demuxstatuscb_ != nullptr)
+            err = "av_packet_alloc() return nullptr.";
+            break;
+        }
+        // 初始化packet
+        av_init_packet(packet);
+
+        // bsf
+        if (!bsfname_.empty())
+        {
+            bsf = av_bsf_get_by_name(bsfname_.c_str());
+            if (bsf == nullptr)
             {
-                status_ = STOP;
-                demuxstatuscb_(STOP, av_err2str(ret), demuxstatuscbparam_);
+                err = "av_bsf_get_by_name() return nullptr.";
+                break;
             }
-            break; //这里认为视频读取完了
+            ret = av_bsf_alloc(bsf, &bsfctx);
+            if (ret < 0)
+            {
+                err = av_err2str(ret);
+                break;
+            }
+            for (int i = 0; i < fmtctx_->nb_streams; ++i)
+            {
+                if (fmtctx_->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+                {
+                    codecpar = fmtctx_->streams[i]->codecpar;
+                    vindex = i;
+                    break;
+                }
+            }
+            ret = avcodec_parameters_copy(bsfctx->par_in, codecpar);
+            if (ret < 0)
+            {
+                err = av_err2str(ret);
+                break;
+            }
+            ret = av_bsf_init(bsfctx);
+            if (ret < 0)
+            {
+                err = av_err2str(ret);
+                break;
+            }
         }
-        else if (demuxpacketcb_ != nullptr)
+
+        // 循环读数据解码数据
+        while (true)
         {
-            demuxpacketcb_(packet, av_rescale_q_rnd(packet->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), demuxpacketcbparam_);
+            if (status_ != DEMUXING)
+            {
+                break;
+            }
+
+            // 读数据
+            ret = av_read_frame(fmtctx_, packet);
+            if (ret < 0)
+            {
+                err = av_err2str(ret);
+                break; //这里认为视频读取完了
+            }
+            else if (demuxpacketcb_ != nullptr)
+            {
+                if (packet->stream_index == vindex && bsfctx != nullptr)
+                {
+                        ret = av_bsf_send_packet(bsfctx, packet);
+                        if (ret < 0)
+                        {
+                            err = av_err2str(ret);
+                            break;
+                        }
+                        while (ret >= 0)
+                        {
+                            ret = av_bsf_receive_packet(bsfctx, packet);
+                            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                            {
+                                // 不完整或者EOF
+                                break;
+                            }
+                            else if (ret < 0)
+                            {
+                                // 其他错误
+                                err = av_err2str(ret);
+                                break;
+                            }
+                            else
+                            {
+                                demuxpacketcb_(packet, av_rescale_q_rnd(packet->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), demuxpacketcbparam_);
+                                continue;
+                            }
+                    }
+                }
+                else
+                {
+                    demuxpacketcb_(packet, av_rescale_q_rnd(packet->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), demuxpacketcbparam_);
+                }
+            }
+
+            // 不再引用指向的缓冲区
+            av_packet_unref(packet);
         }
+        break;
+    } while (true);
 
-        // 不再引用指向的缓冲区
-        av_packet_unref(packet);
-    }
-
-    // 清理packet和frame
+    // 清理bsf
+    av_bsf_free(&bsfctx);
+    // 清理packet
     av_packet_free(&packet);
+
+    status_ = STOP;
+    if (demuxstatuscb_ != nullptr)
+    {
+        demuxstatuscb_(STOP, err, demuxstatuscbparam_);
+    }
 
     return true;
 }
@@ -239,7 +323,7 @@ bool CDemux::device_register_all(std::string& err)
     return true;
 }
 
-bool CDemux::set_input_format(std::string fmt, std::string& err)
+bool CDemux::set_input_format(const std::string& fmt, std::string& err)
 {
     LOCK();
     CHECKSTOP(err);
@@ -247,7 +331,7 @@ bool CDemux::set_input_format(std::string fmt, std::string& err)
 
     if (fmt.empty())
     {
-        err = "input is empty.";
+        err = "fmt is empty.";
         return false;
     }
     else
@@ -263,7 +347,7 @@ bool CDemux::set_input_format(std::string fmt, std::string& err)
     return true;
 }
 
-bool CDemux::set_dic_opt(std::string key, std::string value, std::string& err)
+bool CDemux::set_dic_opt(const std::string& key, const std::string& value, std::string& err)
 {
     LOCK();
     CHECKSTOP(err);
@@ -288,6 +372,17 @@ bool CDemux::free_opt(std::string& err)
 
     av_dict_free(&dic_);
     fmt_ = nullptr;
+
+    return true;
+}
+
+bool CDemux::set_bsf_name(const std::string& bsf, std::string& err)
+{
+    LOCK();
+    CHECKSTOP(err);
+    err = "opt succeed.";
+
+    bsfname_ = bsf;
 
     return true;
 }

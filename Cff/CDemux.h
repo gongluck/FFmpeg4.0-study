@@ -1,4 +1,16 @@
-﻿#ifndef __CDEMUX_H__
+﻿/*******************************************************************
+*  Copyright(c) 2019
+*  All rights reserved.
+*
+*  文件名称:    CDemux.h
+*  简要描述:    解封装
+*
+*  作者:  gongluck
+*  说明:
+*
+*******************************************************************/
+
+#ifndef __CDEMUX_H__
 #define __CDEMUX_H__
 
 #ifdef __cplusplus
@@ -20,11 +32,11 @@ extern "C"
 class CDemux
 {
 public:
-    ~CDemux();
+    virtual ~CDemux();
     // 状态
     enum STATUS { STOP, DEMUXING };
     // 状态通知回调声明
-    typedef void (*DemuxStatusCallback)(STATUS status, std::string err, void* param);
+    typedef void (*DemuxStatusCallback)(STATUS status, const std::string& err, void* param);
     // 解码帧回调声明
     typedef void (*DemuxPacketCallback)(const AVPacket* packet, int64_t timestamp, void* param);
 
@@ -56,11 +68,14 @@ public:
     // 启用设备采集
     bool device_register_all(std::string& err);
     // 设置输入格式
-    bool set_input_format(std::string fmt, std::string& err);
+    bool set_input_format(const std::string& fmt, std::string& err);
     // 设置附加参数
-    bool set_dic_opt(std::string key, std::string value, std::string& err);
+    bool set_dic_opt(const std::string& key, const std::string& value, std::string& err);
     // 清理设置
     bool free_opt(std::string& err);
+
+    // 设置bsf名称，影响回调的packet数据能否直接播放
+    bool set_bsf_name(const std::string& bsf, std::string& err);
 
 private:
     // 解封装线程
@@ -82,6 +97,7 @@ private:
     AVFormatContext* fmtctx_ = nullptr;
     AVInputFormat* fmt_ = nullptr;
     AVDictionary* dic_ = nullptr;
+    std::string bsfname_;
 };
 
 #endif//__CDEMUX_H__

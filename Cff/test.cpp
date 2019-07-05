@@ -1,9 +1,23 @@
-﻿#include "CDemux.h"
+﻿/*******************************************************************
+*  Copyright(c) 2019
+*  All rights reserved.
+*
+*  文件名称:    test.cpp
+*  简要描述:    测试
+*
+*  作者:  gongluck
+*  说明:
+*
+*******************************************************************/
+
+#include "CDemux.h"
 #include "CDecode.h"
 #include "CSws.h"
 #include "CSwr.h"
 #include <iostream>
 #include <fstream>
+
+//#define SEEK
 
 CDemux g_demux;
 CDecode g_decode;
@@ -36,7 +50,7 @@ if(!ret)\
     return;\
 }
 
-void DecStatusCB(CDemux::STATUS status, std::string err, void* param)
+void DemuxStatusCB(CDemux::STATUS status, const std::string& err, void* param)
 {
     std::cout << std::this_thread::get_id() << " got a status " << status << " " << err << std::endl;
 }
@@ -46,27 +60,30 @@ void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
     std::cout << std::this_thread::get_id() << 
         " got a packet , index : " << packet->stream_index <<
         " timestamp : " << timestamp << std::endl;
+
+#ifdef SEEK
     std::string err;
-    bool ret;
+    CDemux* demux = static_cast<CDemux*>(param);
+    if (demux != nullptr && timestamp > 10 && !demux->seek(5, packet->stream_index, AVSEEK_FLAG_ANY, err))
+    {
+        std::cerr << err << std::endl;
+    }
+#endif
     if (packet->stream_index == g_vindex)
     {
-        ret = g_decode.decode(packet, err);
-        if (!ret)
+        static std::ofstream out("out.h264", std::ios::binary | std::ios::trunc);
+        if (out.is_open())
         {
-            std::cout << "deocde v err : " << err << std::endl;
+            out.write(reinterpret_cast<char*>(const_cast<uint8_t*>(packet->data)), packet->size);
         }
     }
-    else if (packet->stream_index == g_aindex)
+    else if(packet->stream_index == g_aindex)
     {
-        ret = g_decode2.decode(packet, err);
-        if (!ret)
+        static std::ofstream out("out.aac", std::ios::binary | std::ios::trunc);
+        if (out.is_open())
         {
-            std::cout << "deocde a err : " << err << std::endl;
+            out.write(reinterpret_cast<char*>(const_cast<uint8_t*>(packet->data)), packet->size);
         }
-    }
-    if (timestamp > 10)
-    {
-        g_demux.seek(5, packet->stream_index, AVSEEK_FLAG_ANY, err);
     }
 }
 
@@ -178,7 +195,7 @@ int main1(int argc, char* argv[])
     //TESTCHECKRET(ret);
     ret = g_demux.set_demux_callback(DemuxPacketCB, nullptr, err);
     TESTCHECKRET(ret);
-    ret = g_demux.set_demux_status_callback(DecStatusCB, nullptr, err);
+    ret = g_demux.set_demux_status_callback(DemuxStatusCB, nullptr, err);
     TESTCHECKRET(ret);
 
     //ret = demux.set_input("desktop", err);
@@ -248,7 +265,7 @@ int main1(int argc, char* argv[])
 }
 
 // 解码h264文件
-int main()
+int mainh264()
 {
     bool ret = false;
     std::string err;
@@ -270,5 +287,47 @@ int main()
         TESTCHECKRET(ret);
     }
 
+    return 0;
+}
+
+void test_demux()
+{
+    bool ret = false;
+    std::string err;
+    CDemux demux;
+    
+    ret = demux.set_input("in.flv", err);
+    TESTCHECKRET(ret);
+
+    ret = demux.set_demux_callback(DemuxPacketCB, &demux, err);
+    TESTCHECKRET(ret);
+
+    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux, err);
+    TESTCHECKRET(ret);
+
+    ret = demux.set_bsf_name("h264_mp4toannexb", err);
+    TESTCHECKRET(ret);
+
+    ret = demux.openinput(err);
+    TESTCHECKRET(ret);
+
+    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+    std::cout << err << std::endl;
+    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    std::cout << err << std::endl;
+
+    ret = demux.begindemux(err);
+    TESTCHECKRET(ret);
+
+    std::cout << "input to stop demuxing." << std::endl;
+    std::cin.get();
+
+    ret = demux.stopdemux(err);
+    TESTCHECKRET(ret);
+}
+
+int main()
+{
+    test_demux();
     return 0;
 }
