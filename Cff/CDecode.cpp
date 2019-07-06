@@ -258,6 +258,17 @@ bool CDecode::decode(const void* data, uint32_t size, std::string& err)
     err = "opt succeed.";
     int ret = 0;
 
+    if (par_ == nullptr)
+    {
+        err == "par_ is nullptr.";
+        return false;
+    }
+    else if (codectx_ == nullptr)
+    {
+        err = "codectx_ is nullptr.";
+        return false;
+    }
+
     int pos = 0;
     while (size > 0) 
     {
