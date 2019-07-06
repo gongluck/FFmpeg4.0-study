@@ -2,14 +2,6 @@
 tmp
 out.*
 *.exe
-*.bgr
-*.bgra
-*.rgb
-*.yuv
-*.pcm
-out.h264
-*.mp3
-*.mp4
 *.db
 *.ipch
 *.pdb

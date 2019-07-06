@@ -90,7 +90,6 @@ void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
 
 void DecFrameCB(const AVFrame* frame, void* param)
 {
-    //std::cout << std::this_thread::get_id() << " got a frame."  << std::endl;
     std::string err;
     CDecode* dec = static_cast<CDecode*>(param);
 
@@ -100,11 +99,14 @@ void DecFrameCB(const AVFrame* frame, void* param)
     }
     else if (frame->format == AV_PIX_FMT_DXVA2_VLD)
     {
-        std::cout << "AV_PIX_FMT_DXVA2_VLD frame." << std::endl;
+        std::cout << "got a dxva2vld " << frame->width << "x" << frame->height << std::endl;
     }
     else if (frame->format == AV_PIX_FMT_NV12)
     {
-        std::cout << "AV_PIX_FMT_NV12 frame." << std::endl;
+        std::cout << "got a nv12 " << frame->width << "x" << frame->height << std::endl;
+        static std::ofstream video("out.nv12", std::ios::binary | std::ios::trunc);
+        video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
+        video.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
     }
     else if (frame->format == AV_PIX_FMT_BGRA)
     {
@@ -113,32 +115,11 @@ void DecFrameCB(const AVFrame* frame, void* param)
     }
     else if (frame->format == AV_PIX_FMT_YUV420P)
     {
+        std::cout << "got a yuv420p " << frame->width << "x" << frame->height << std::endl;
         static std::ofstream video("out.yuv", std::ios::binary | std::ios::trunc);
         video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
         video.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
         video.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
-        
-        /*static bool bret = false;
-        static std::ofstream video("out.rgb", std::ios::binary | std::ios::trunc);
-        static int i = 0;
-        if (i++ == 0)
-        {
-            bret = g_sws.set_src_opt(static_cast<AVPixelFormat>(frame->format), frame->width, frame->height, err);
-            TESTCHECKRET2(bret);
-            bret = g_sws.set_dst_opt(AV_PIX_FMT_RGB24, 320, 240, err);
-            TESTCHECKRET2(bret);
-            bret = g_sws.lock_opt(err);
-            TESTCHECKRET2(bret);
-        }*/
-        // 将输出翻转
-        //g_pointers[0] += g_linesizes[0] * (240 - 1);
-        //g_linesizes[0] *= -1;
-        // 转换
-        //int ret = g_sws.scale(frame->data, frame->linesize, 0, frame->height, g_pointers, g_linesizes, err);
-        // 还原指针，以便拷贝数据
-        //g_linesizes[0] *= -1;
-        //g_pointers[0] -= g_linesizes[0] * (240 - 1);
-        //video.write(reinterpret_cast<const char*>(g_pointers[0]), g_linesizes[0] * ret);
     }
     else if (frame->format == AV_SAMPLE_FMT_S16)
     {
@@ -148,29 +129,14 @@ void DecFrameCB(const AVFrame* frame, void* param)
     }
     else if (frame->format == AV_SAMPLE_FMT_FLTP)
     {
-        static bool bret = false;
+        std::cout << "got a fltp" << std::endl;
         static std::ofstream audio("out.pcm", std::ios::binary | std::ios::trunc);
-        static int i = 0;
-        if (i++ == 0)
+        auto size = av_get_bytes_per_sample(static_cast<AVSampleFormat>(frame->format));
+        for (int i = 0; i < frame->nb_samples; ++i)
         {
-            bret = g_swr.set_src_opt(frame->channel_layout, frame->sample_rate, static_cast<AVSampleFormat>(frame->format), err);
-            TESTCHECKRET2(bret);
-            bret = g_swr.set_dst_opt(g_layout, g_rate, g_fmt, err);
-            TESTCHECKRET2(bret);
-            bret = g_swr.lock_opt(err);
-            TESTCHECKRET2(bret);
-        }
-
-        // 返回每个通道(channel)的样本数(samples)
-        int ret = g_swr.convert(g_data, g_linesize, (const uint8_t * *)frame->data, frame->nb_samples, err);
-        // 获取样本格式对应的每个样本大小(Byte)
-        auto size = av_get_bytes_per_sample(g_fmt);
-        // 拷贝音频数据
-        for (int i = 0; i < ret; ++i) // 每个样本
-        {
-            for (int j = 0; j < av_get_channel_layout_nb_channels(g_layout)/* 获取布局对应的通道数 */; ++j) // 每个通道
+            for (int j = 0; j < frame->channels; ++j)
             {
-                audio.write(reinterpret_cast<const char*>(g_data[j] + size * i), size);
+                audio.write(reinterpret_cast<const char*>(frame->data[j] + size * i), size);
             }
         }
     }
@@ -265,32 +231,7 @@ int main1(int argc, char* argv[])
     return 0;
 }
 
-// 解码h264文件
-int mainh264()
-{
-    bool ret = false;
-    std::string err;
-    std::ifstream h264("in.h264", std::ios::binary);
-    char buf[1024] = { 0 };
-    CDecode dech264;
-
-    ret = dech264.set_dec_callback(DecFrameCB, &dech264, err);
-    TESTCHECKRET(ret);
-    ret = dech264.set_codeid(AV_CODEC_ID_H264, err);
-    TESTCHECKRET(ret);
-    ret = dech264.codec_open(err);
-    TESTCHECKRET(ret);
-
-    while (!h264.eof())
-    {
-        h264.read(buf, sizeof(buf));
-        ret = dech264.decode(buf, sizeof(buf), err);
-        TESTCHECKRET(ret);
-    }
-
-    return 0;
-}
-
+// 解封装
 void test_demux()
 {
     bool ret = false;
@@ -329,8 +270,85 @@ void test_demux()
     TESTCHECKRET(ret);
 }
 
+// 解码h264
+void test_decode_h264()
+{
+    bool ret = false;
+    std::string err;
+    std::ifstream h264("in.h264", std::ios::binary);
+    char buf[1024] = { 0 };
+    CDecode decode;
+
+    ret = decode.set_dec_callback(DecFrameCB, &decode, err);
+    TESTCHECKRET(ret);
+    ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true, err);
+    TESTCHECKRET(ret);
+    ret = decode.set_codeid(AV_CODEC_ID_H264, err);
+    TESTCHECKRET(ret);
+    ret = decode.codec_open(err);
+    TESTCHECKRET(ret);
+
+    while (!h264.eof())
+    {
+        h264.read(buf, sizeof(buf));
+        ret = decode.decode(buf, sizeof(buf), err);
+        TESTCHECKRET(ret);
+    }
+}
+
+// 解码aac
+void test_decode_aac()
+{
+    bool ret = false;
+    std::string err;
+    std::ifstream aac("in.aac", std::ios::binary);
+    char buf[1024] = { 0 };
+    CDecode decode;
+
+    ret = decode.set_dec_callback(DecFrameCB, &decode, err);
+    TESTCHECKRET(ret);
+    ret = decode.set_codeid(AV_CODEC_ID_AAC, err);
+    TESTCHECKRET(ret);
+    ret = decode.codec_open(err);
+    TESTCHECKRET(ret);
+
+    while (!aac.eof())
+    {
+        aac.read(buf, sizeof(buf));
+        ret = decode.decode(buf, sizeof(buf), err);
+        TESTCHECKRET(ret);
+    }
+}
+
+// 解码mp3
+void test_decode_mp3()
+{
+    bool ret = false;
+    std::string err;
+    std::ifstream mp3("in.mp3", std::ios::binary);
+    char buf[1024] = { 0 };
+    CDecode decode;
+
+    ret = decode.set_dec_callback(DecFrameCB, &decode, err);
+    TESTCHECKRET(ret);
+    ret = decode.set_codeid(AV_CODEC_ID_MP3, err);
+    TESTCHECKRET(ret);
+    ret = decode.codec_open(err);
+    TESTCHECKRET(ret);
+
+    while (!mp3.eof())
+    {
+        mp3.read(buf, sizeof(buf));
+        ret = decode.decode(buf, sizeof(buf), err);
+        TESTCHECKRET(ret);
+    }
+}
+
 int main()
 {
-    test_demux();
+    //test_demux();
+    //test_decode_h264();
+    //test_decode_aac();
+    //test_decode_mp3();
     return 0;
 }

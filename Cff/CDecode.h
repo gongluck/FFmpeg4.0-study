@@ -1,4 +1,16 @@
-﻿#ifndef __CDECODE_H__
+﻿/*******************************************************************
+*  Copyright(c) 2019
+*  All rights reserved.
+*
+*  文件名称:    CDecode.h
+*  简要描述:    解码
+*
+*  作者:  gongluck
+*  说明:
+*
+*******************************************************************/
+
+#ifndef __CDECODE_H__
 #define __CDECODE_H__
 
 #ifdef __cplusplus
@@ -18,7 +30,7 @@ extern "C"
 class CDecode
 {
 public:
-    ~CDecode();
+    virtual ~CDecode();
     // 解码帧回调声明
     typedef void (*DecFrameCallback)(const AVFrame* frame, void* param);
 

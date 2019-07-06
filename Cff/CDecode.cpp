@@ -1,4 +1,16 @@
-﻿#include "common.h"
+﻿/*******************************************************************
+*  Copyright(c) 2019
+*  All rights reserved.
+*
+*  文件名称:    CDecode.cpp
+*  简要描述:    解码
+*
+*  作者:  gongluck
+*  说明:
+*
+*******************************************************************/
+
+#include "common.h"
 #include "CDecode.h"
 
 CDecode::~CDecode()
@@ -33,7 +45,7 @@ bool CDecode::set_codeid(AVCodecID id, std::string& err)
 {
     LOCK();
     err = "opt succeed.";
-    int ret = 0;
+    int ret;
 
     if (!clean_opt(err))
     {
@@ -48,14 +60,12 @@ bool CDecode::set_codeid(AVCodecID id, std::string& err)
             err = "avcodec_find_decoder return nullptr";
             break;
         }
-
         codectx_ = avcodec_alloc_context3(codec_);
         if (codectx_ == nullptr)
         {
             err = "avcodec_alloc_context3 return nullptr";
             break;
         }
-
         par_ = av_parser_init(codec_->id);
         if (par_ == nullptr)
         {
@@ -119,7 +129,6 @@ bool CDecode::copy_param(const AVCodecParameters* par, std::string& err)
         err = "par is nullptr";
         return false;
     }
-
     if (!set_codeid(par->codec_id, err))
     {
         return false;
@@ -169,8 +178,7 @@ bool CDecode::decode(const AVPacket* packet, std::string& err)
         err == "packet is nullptr.";
         return false;
     }
-
-    if (codectx_ == nullptr)
+    else if (codectx_ == nullptr)
     {
         err = "codectx_ is nullptr.";
         return false;
@@ -197,6 +205,7 @@ bool CDecode::decode(const AVPacket* packet, std::string& err)
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
         {
             // 不完整或者EOF
+            err = av_err2str(ret);
             break;
         }
         else if (ret < 0)
@@ -212,7 +221,7 @@ bool CDecode::decode(const AVPacket* packet, std::string& err)
             {
                 if (hwtype_ != AV_HWDEVICE_TYPE_NONE // 使用硬解
                     && frame->format == hwfmt_ // 硬解格式
-                    && trans_ // 转换
+                    && trans_ // 显卡->内存转换
                     )
                 {
                     ret = av_hwframe_transfer_data(traframe, frame, 0);
