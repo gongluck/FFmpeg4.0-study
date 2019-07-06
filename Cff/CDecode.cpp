@@ -70,7 +70,7 @@ bool CDecode::set_codeid(AVCodecID id, std::string& err)
         if (par_ == nullptr)
         {
             err = "av_parser_init return nullptr";
-            break;
+            //break;
         }
 
         if (hwtype_ != AV_HWDEVICE_TYPE_NONE)

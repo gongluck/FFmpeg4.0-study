@@ -89,9 +89,26 @@ void DemuxDesktopCB(const AVPacket* packet, int64_t timestamp, void* param)
             std::cerr << err << std::endl;
         }
     }
+}     
+
+void DemuxSystemSoundCB(const AVPacket* packet, int64_t timestamp, void* param)
+{
+    std::cout << std::this_thread::get_id() <<
+        " got a packet , index : " << packet->stream_index <<
+        " timestamp : " << timestamp << std::endl;
+
+    CDecode* decode = static_cast<CDecode*>(param);
+    std::string err;
+    if (decode != nullptr)
+    {
+        if (!decode->decode(packet, err))
+        {
+            std::cerr << err << std::endl;
+        }
+    }
 }
 
-void DecFrameCB(const AVFrame* frame, void* param)
+void DecVideoFrameCB(const AVFrame* frame, void* param)
 {
     std::string err;
     CDecode* dec = static_cast<CDecode*>(param);
@@ -115,7 +132,20 @@ void DecFrameCB(const AVFrame* frame, void* param)
         video.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
         video.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
     }
-    else if (frame->format == AV_SAMPLE_FMT_FLTP)
+    else if (frame->format == AV_PIX_FMT_BGRA)
+    {
+        std::cout << "got a bgra" << std::endl;
+        static std::ofstream video("out.bgra", std::ios::binary | std::ios::trunc);
+        video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
+    }
+}         
+
+void DecAudioFrameCB(const AVFrame* frame, void* param)
+{
+    std::string err;
+    CDecode* dec = static_cast<CDecode*>(param);
+
+    if (frame->format == AV_SAMPLE_FMT_FLTP)
     {
         std::cout << "got a fltp" << std::endl;
         static std::ofstream audio("out.pcm", std::ios::binary | std::ios::trunc);
@@ -128,11 +158,11 @@ void DecFrameCB(const AVFrame* frame, void* param)
             }
         }
     }
-    else if (frame->format == AV_PIX_FMT_BGRA)
+    else if (frame->format == AV_SAMPLE_FMT_S16)
     {
-        std::cout << "got a bgra" << std::endl;
-        static std::ofstream video("out.bgra", std::ios::binary | std::ios::trunc);
-        video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
+        std::cout << "got a s16" << std::endl;
+        static std::ofstream audio("out.pcm", std::ios::binary | std::ios::trunc);
+        audio.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0]);
     }
 }
 
@@ -184,7 +214,7 @@ void test_decode_h264()
     char buf[1024] = { 0 };
     CDecode decode;
 
-    ret = decode.set_dec_callback(DecFrameCB, &decode, err);
+    ret = decode.set_dec_callback(DecVideoFrameCB, &decode, err);
     TESTCHECKRET(ret);
     //ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true, err);
     //TESTCHECKRET(ret);
@@ -210,7 +240,7 @@ void test_decode_aac()
     char buf[1024] = { 0 };
     CDecode decode;
 
-    ret = decode.set_dec_callback(DecFrameCB, &decode, err);
+    ret = decode.set_dec_callback(DecAudioFrameCB, &decode, err);
     TESTCHECKRET(ret);
     ret = decode.set_codeid(AV_CODEC_ID_AAC, err);
     TESTCHECKRET(ret);
@@ -234,7 +264,7 @@ void test_decode_mp3()
     char buf[1024] = { 0 };
     CDecode decode;
 
-    ret = decode.set_dec_callback(DecFrameCB, &decode, err);
+    ret = decode.set_dec_callback(DecAudioFrameCB, &decode, err);
     TESTCHECKRET(ret);
     ret = decode.set_codeid(AV_CODEC_ID_MP3, err);
     TESTCHECKRET(ret);
@@ -363,7 +393,7 @@ void test_desktop()
     CDemux demux;
     CDecode decode;
     
-    demux.device_register_all(err);
+    ret = demux.device_register_all(err);
     TESTCHECKRET(ret);
     ret = demux.set_input_format("gdigrab", err); //采集桌面
     TESTCHECKRET(ret);
@@ -383,9 +413,54 @@ void test_desktop()
     g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
     std::cout << err << std::endl;
 
-    ret = decode.set_dec_callback(DecFrameCB, &decode, err);
+    ret = decode.set_dec_callback(DecVideoFrameCB, &decode, err);
     TESTCHECKRET(ret);
     ret = decode.copy_param(demux.get_steam_par(g_vindex, err), err);
+    TESTCHECKRET(ret);
+    ret = decode.codec_open(err);
+    TESTCHECKRET(ret);
+
+    ret = demux.begindemux(err);
+    TESTCHECKRET(ret);
+
+    std::cout << "input to stop demuxing." << std::endl;
+    std::cin.get();
+
+    ret = demux.stopdemux(err);
+    TESTCHECKRET(ret);
+}
+
+// 采集系统声音
+void test_systemsound()
+{
+    bool ret = false;
+    std::string err;
+    CDemux demux;
+    CDecode decode;
+
+    ret = demux.device_register_all(err);
+    TESTCHECKRET(ret);
+    ret = demux.set_input_format("dshow", err); //采集声卡
+    TESTCHECKRET(ret);
+    ret = demux.set_dic_opt("framerate", "15", err);
+    TESTCHECKRET(ret);
+    ret = demux.set_demux_callback(DemuxSystemSoundCB, &decode, err);
+    TESTCHECKRET(ret);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux, err);
+    TESTCHECKRET(ret);
+    ret = demux.set_input("audio=virtual-audio-capturer", err);
+    TESTCHECKRET(ret);
+    ret = demux.openinput(err);
+    TESTCHECKRET(ret);
+
+    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+    std::cout << err << std::endl;
+    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    std::cout << err << std::endl;
+
+    ret = decode.set_dec_callback(DecAudioFrameCB, &decode, err);
+    TESTCHECKRET(ret);
+    ret = decode.copy_param(demux.get_steam_par(g_aindex, err), err);
     TESTCHECKRET(ret);
     ret = decode.codec_open(err);
     TESTCHECKRET(ret);
@@ -409,5 +484,6 @@ int main()
     //test_sws();
     //test_swr();
     //test_desktop();
+    //test_systemsound();
     return 0;
 }
