@@ -1,4 +1,4 @@
-#ifndef __CSWS_H__
+ï»¿#ifndef __CSWS_H__
 #define __CSWS_H__
 
 #ifdef __cplusplus
@@ -8,7 +8,6 @@ extern "C"
 
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h> // av_image_alloc
-
 
 #ifdef __cplusplus
 }
@@ -20,19 +19,19 @@ extern "C"
 class CSws
 {
 public:
-    ~CSws();
+    virtual ~CSws();
 
-    // ×´Ì¬
+    // çŠ¶æ€
     enum STATUS { STOP, LOCKED };
-    // ÉèÖÃÔ´²ÎÊı
+    // è®¾ç½®æºå‚æ•°
     bool set_src_opt(AVPixelFormat pixfmt, int w, int h, std::string& err);
-    // ÉèÖÃÄ¿±ê²ÎÊı
+    // è®¾ç½®ç›®æ ‡å‚æ•°
     bool set_dst_opt(AVPixelFormat pixfmt, int w, int h, std::string& err);
-    // Ëø¶¨ÉèÖÃ
+    // é”å®šè®¾ç½®
     bool lock_opt(std::string& err);
-    // ½â³ıËø¶¨
+    // è§£é™¤é”å®š
     bool unlock_opt(std::string& err);
-    // ×ª»»
+    // è½¬æ¢
     int scale(const uint8_t* const srcSlice[], const int srcStride[], int srcSliceY, int srcSliceH, uint8_t* const dst[], const int dstStride[], std::string& err);
 
 private:

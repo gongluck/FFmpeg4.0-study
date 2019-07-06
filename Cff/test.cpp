@@ -19,22 +19,8 @@
 
 //#define SEEK
 
-CDemux g_demux;
-CDecode g_decode;
-CDecode g_decode2;
 int g_vindex = -1;
 int g_aindex = -1;
-
-CSws g_sws;
-uint8_t* g_pointers[4] = { 0 };
-int g_linesizes[4] = { 0 };
-
-CSwr g_swr;
-uint8_t** g_data = nullptr;
-int g_linesize = 0;
-int64_t g_layout = AV_CH_LAYOUT_STEREO;
-int g_rate = 44100;
-enum AVSampleFormat g_fmt = AV_SAMPLE_FMT_DBLP;
 
 #define TESTCHECKRET(ret)\
 if(!ret)\
@@ -142,95 +128,6 @@ void DecFrameCB(const AVFrame* frame, void* param)
     }
 }
 
-int main1(int argc, char* argv[])
-{
-    std::string err;
-    bool ret = false;
-
-    // 分配图像数据内存
-    int size = av_image_alloc(g_pointers, g_linesizes, 320, 240, AV_PIX_FMT_RGB24, 1);
-
-    // 分配音频数据内存
-    size = av_samples_alloc_array_and_samples(&g_data, &g_linesize, av_get_channel_layout_nb_channels(g_layout), g_rate, g_fmt, 0);
-    
-    //demux.device_register_all(err);
-    //TESTCHECKRET(ret);
-    //ret = demux.set_input_format("gdigrab", err); //采集摄像头
-    //ret = demux.set_input_format("dshow", err); //采集声卡
-    //TESTCHECKRET(ret);
-    //ret = demux.set_dic_opt("framerate", "15", err); //"audio=virtual-audio-capturer"这个不设置帧率得到的音频有问题
-    //TESTCHECKRET(ret);
-    ret = g_demux.set_demux_callback(DemuxPacketCB, nullptr, err);
-    TESTCHECKRET(ret);
-    ret = g_demux.set_demux_status_callback(DemuxStatusCB, nullptr, err);
-    TESTCHECKRET(ret);
-
-    //ret = demux.set_input("desktop", err);
-    //ret = demux.set_input("audio=virtual-audio-capturer", err);
-    ret = g_demux.set_input("in.flv", err);
-    //ret = demux.set_input("rtmp://localhost/live/test", err);
-    TESTCHECKRET(ret);
-    ret = g_decode.set_dec_callback(DecFrameCB, &g_decode, err);
-    TESTCHECKRET(ret);
-    
-    //ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true, err);
-    //TESTCHECKRET(ret);
-
-    ret = g_decode2.set_dec_callback(DecFrameCB, &g_decode2, err);
-    TESTCHECKRET(ret);
-
-    int i = 0;
-    while (i++ < 5)
-    {
-        ret = g_demux.openinput(err);
-        TESTCHECKRET(ret);
-        g_vindex = g_demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
-        if (g_vindex != -1)
-        {
-            ret = g_decode.copy_param(g_demux.get_steam_par(g_vindex, err), err);
-            TESTCHECKRET(ret);
-            ret = g_decode.codec_open(err);
-            TESTCHECKRET(ret);
-        }
-        g_aindex = g_demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
-        if (g_aindex != -1)
-        {
-            ret = g_decode2.copy_param(g_demux.get_steam_par(g_aindex, err), err);
-            TESTCHECKRET(ret);
-            ret = g_decode.codec_open(err);
-            TESTCHECKRET(ret);
-        }
-        ret = g_demux.begindemux(err);
-        TESTCHECKRET(ret);
-
-        std::cout << "input to stop decoding." << std::endl;
-        getchar();
-
-        ret = g_demux.stopdemux(err);
-        TESTCHECKRET(ret);
-    }
-
-    ret = g_sws.unlock_opt(err);
-    TESTCHECKRET(ret);
-    // 清理图像数据内存
-    if (g_pointers)
-    {
-        av_freep(&g_pointers[0]);
-    }
-    av_freep(&g_pointers);
-
-    ret = g_swr.unlock_opt(err);
-    TESTCHECKRET(ret);
-    // 清理音频数据内存
-    if (g_data)
-    {
-        av_freep(&g_data[0]);
-    }
-    av_freep(&g_data);
-
-    return 0;
-}
-
 // 解封装
 void test_demux()
 {
@@ -281,8 +178,8 @@ void test_decode_h264()
 
     ret = decode.set_dec_callback(DecFrameCB, &decode, err);
     TESTCHECKRET(ret);
-    ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true, err);
-    TESTCHECKRET(ret);
+    //ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true, err);
+    //TESTCHECKRET(ret);
     ret = decode.set_codeid(AV_CODEC_ID_H264, err);
     TESTCHECKRET(ret);
     ret = decode.codec_open(err);
@@ -344,11 +241,49 @@ void test_decode_mp3()
     }
 }
 
+// 视频帧转换
+void test_sws()
+{
+    bool ret = false;
+    std::string err;
+    std::ifstream yuv("in.yuv", std::ios::binary);
+    CSws sws;
+
+    // 分配图像数据内存
+    uint8_t* src[4] = { 0 };
+    int srclinesize[4] = { 0 };
+    uint8_t* dst[4] = { 0 };
+    int dstlinesize[4] = { 0 };
+
+    int srcsize = av_image_alloc(src, srclinesize, 640, 432, AV_PIX_FMT_YUV420P, 1);
+    int dstsize = av_image_alloc(dst, dstlinesize, 320, 240, AV_PIX_FMT_BGR24, 1);
+    yuv.read(reinterpret_cast<char*>(src[0]), 640 * 432);
+    yuv.read(reinterpret_cast<char*>(src[1]), 640 * 432 / 4);
+    yuv.read(reinterpret_cast<char*>(src[2]), 640 * 432 / 4);
+
+    ret = sws.set_src_opt(AV_PIX_FMT_YUV420P, 640, 432, err);
+    TESTCHECKRET(ret);
+    ret = sws.set_dst_opt(AV_PIX_FMT_BGR24, 320, 240, err);
+    TESTCHECKRET(ret);
+    ret = sws.lock_opt(err);
+    TESTCHECKRET(ret);
+    int size = sws.scale(src, srclinesize, 0, 432, dst, dstlinesize, err);
+    std::cout << "sws " << size << " line" << std::endl;
+    std::ofstream bgr("out.bgr", std::ios::binary);
+    bgr.write(reinterpret_cast<char*>(dst[0]), dstsize);
+    ret = sws.unlock_opt(err);
+    TESTCHECKRET(ret);
+
+    av_freep(&src[0]);
+    av_freep(&dst[0]);
+}
+
 int main()
 {
     //test_demux();
     //test_decode_h264();
     //test_decode_aac();
     //test_decode_mp3();
+    //test_sws();
     return 0;
 }
