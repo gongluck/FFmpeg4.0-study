@@ -1,3 +1,15 @@
+ï»¿/*******************************************************************
+*  Copyright(c) 2019
+*  All rights reserved.
+*
+*  æ–‡ä»¶åç§°:    CSwr.h
+*  ç®€è¦æè¿°:    é‡é‡‡æ ·
+*
+*  ä½œè€…:  gongluck
+*  è¯´æ˜:
+*
+*******************************************************************/
+
 #ifndef __CSWR_H__
 #define __CSWR_H__
 
@@ -7,7 +19,6 @@ extern "C"
 #endif
 
 #include <libswresample/swresample.h>
-
 
 #ifdef __cplusplus
 }
@@ -19,19 +30,19 @@ extern "C"
 class CSwr
 {
 public:
-    ~CSwr();
+    virtual ~CSwr();
 
-    // ×´Ì¬
+    // çŠ¶æ€
     enum STATUS { STOP, LOCKED };
-    // ÉèÖÃÔ´²ÎÊı
+    // è®¾ç½®æºå‚æ•°
     bool set_src_opt(int64_t layout, int rate, enum AVSampleFormat fmt, std::string& err);
-    // ÉèÖÃÄ¿±ê²ÎÊı
+    // è®¾ç½®ç›®æ ‡å‚æ•°
     bool set_dst_opt(int64_t layout, int rate, enum AVSampleFormat fmt, std::string& err);
-    // Ëø¶¨ÉèÖÃ
+    // é”å®šè®¾ç½®
     bool lock_opt(std::string& err);
-    // ½â³ıËø¶¨
+    // è§£é™¤é”å®š
     bool unlock_opt(std::string& err);
-    // ×ª»»
+    // è½¬æ¢(out_count,in_count is per channel's samples)
     int convert(uint8_t** out, int out_count, const uint8_t** in, int in_count, std::string& err);
 
 private:

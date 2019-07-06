@@ -79,11 +79,7 @@ void DecFrameCB(const AVFrame* frame, void* param)
     std::string err;
     CDecode* dec = static_cast<CDecode*>(param);
 
-    if (frame->format == AV_PIX_FMT_D3D11)
-    {
-        std::cout << "AV_PIX_FMT_D3D11 frame." << std::endl;
-    }
-    else if (frame->format == AV_PIX_FMT_DXVA2_VLD)
+    if (frame->format == AV_PIX_FMT_DXVA2_VLD)
     {
         std::cout << "got a dxva2vld " << frame->width << "x" << frame->height << std::endl;
     }
@@ -94,11 +90,6 @@ void DecFrameCB(const AVFrame* frame, void* param)
         video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
         video.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
     }
-    else if (frame->format == AV_PIX_FMT_BGRA)
-    {
-        static std::ofstream video("out.bgra", std::ios::binary | std::ios::trunc);
-        video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
-    }
     else if (frame->format == AV_PIX_FMT_YUV420P)
     {
         std::cout << "got a yuv420p " << frame->width << "x" << frame->height << std::endl;
@@ -106,12 +97,6 @@ void DecFrameCB(const AVFrame* frame, void* param)
         video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
         video.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
         video.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
-    }
-    else if (frame->format == AV_SAMPLE_FMT_S16)
-    {
-        static std::ofstream audio("outs16.pcm", std::ios::binary | std::ios::trunc);
-        // 非平面格式，就直接拷贝data[0]
-        audio.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0]);
     }
     else if (frame->format == AV_SAMPLE_FMT_FLTP)
     {
@@ -274,8 +259,77 @@ void test_sws()
     ret = sws.unlock_opt(err);
     TESTCHECKRET(ret);
 
-    av_freep(&src[0]);
-    av_freep(&dst[0]);
+    // 清理
+    if (src != nullptr)
+    {
+        av_freep(&src[0]);
+    }
+    av_freep(&src);
+    if (dst != nullptr)
+    {
+        av_freep(&dst[0]);
+    }
+    av_freep(&dst);
+}
+
+// 音频重采样
+void test_swr()
+{
+    bool ret = false;
+    std::string err;
+    std::ifstream pcm("in.pcm", std::ios::binary);
+    CSwr swr;
+
+    // 分配音频数据内存
+    uint8_t** src = nullptr;
+    int srclinesize = 0;
+    uint8_t** dst = nullptr;
+    int dstlinesize = 0;
+
+    // 分配音频数据内存
+    int srcsize = av_samples_alloc_array_and_samples(&src, &srclinesize, 2, 44100, AV_SAMPLE_FMT_S16, 1);
+    int dstsize = av_samples_alloc_array_and_samples(&dst, &dstlinesize, 2, 48000, AV_SAMPLE_FMT_S16P, 1);
+    // 获取样本格式对应的每个样本大小(Byte)
+    int persize = av_get_bytes_per_sample(AV_SAMPLE_FMT_S16P);
+    // 获取布局对应的通道数
+    int channel = av_get_channel_layout_nb_channels(AV_CH_LAYOUT_STEREO);
+
+    ret = swr.set_src_opt(AV_CH_LAYOUT_STEREO, 44100, AV_SAMPLE_FMT_S16, err);
+    TESTCHECKRET(ret);
+    ret = swr.set_dst_opt(AV_CH_LAYOUT_STEREO, 48000, AV_SAMPLE_FMT_S16P, err);
+    TESTCHECKRET(ret);
+    ret = swr.lock_opt(err);
+    TESTCHECKRET(ret);
+
+    std::ofstream outpcm("out.pcm", std::ios::binary);
+    while (!pcm.eof())
+    {
+        pcm.read(reinterpret_cast<char*>(src[0]), srcsize);
+        int size = swr.convert(dst, dstlinesize, (const uint8_t**)(src), 44100, err);
+        // 拷贝音频数据
+        for (int i = 0; i < size; ++i) // 每个样本
+        {
+            for (int j = 0; j < channel; ++j) // 每个通道
+            {
+                outpcm.write(reinterpret_cast<const char*>(dst[j] + persize * i), persize);
+            }
+        }
+    }
+
+    ret = swr.unlock_opt(err);
+    TESTCHECKRET(ret);
+
+    // 清理
+    if (src != nullptr)
+    {
+        av_freep(&src[0]);
+    }   
+    av_freep(&src);
+    if (dst != nullptr)
+    {
+        av_freep(&dst[0]);
+    }
+    av_freep(&dst);
 }
 
 int main()
@@ -285,5 +339,6 @@ int main()
     //test_decode_aac();
     //test_decode_mp3();
     //test_sws();
+    //test_swr();
     return 0;
 }
