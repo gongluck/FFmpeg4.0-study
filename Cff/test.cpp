@@ -79,6 +79,7 @@ void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
     }
     else if(packet->stream_index == g_aindex)
     {
+        // 没有打adts头，aac不能正常播放
         static std::ofstream out("out.aac", std::ios::binary | std::ios::trunc);
         if (out.is_open())
         {
@@ -297,6 +298,8 @@ void test_demux()
     CDemux demux;
     
     ret = demux.set_input("in.flv", err);
+    //ret = demux.set_input("in.h264", err);
+    //ret = demux.set_input("in.aac", err);
     TESTCHECKRET(ret);
 
     ret = demux.set_demux_callback(DemuxPacketCB, &demux, err);

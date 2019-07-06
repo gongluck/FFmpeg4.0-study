@@ -171,6 +171,11 @@ bool CDemux::demuxthread()
                     break;
                 }
             }
+            if (codecpar == nullptr)
+            {
+                err = "can not find codecpar.";
+                break;
+            }
             ret = avcodec_parameters_copy(bsfctx->par_in, codecpar);
             if (ret < 0)
             {
@@ -204,31 +209,34 @@ bool CDemux::demuxthread()
             {
                 if (packet->stream_index == vindex && bsfctx != nullptr)
                 {
-                        ret = av_bsf_send_packet(bsfctx, packet);
-                        if (ret < 0)
+                    ret = av_bsf_send_packet(bsfctx, packet);
+                    if (ret < 0)
+                    {
+                        err = av_err2str(ret);
+                        break;
+                    }
+                    while (ret >= 0)
+                    {
+                        ret = av_bsf_receive_packet(bsfctx, packet);
+                        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                         {
-                            err = av_err2str(ret);
+                            // 不完整或者EOF
                             break;
                         }
-                        while (ret >= 0)
+                        else if (ret < 0)
                         {
-                            ret = av_bsf_receive_packet(bsfctx, packet);
-                            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                            // 其他错误
+                            err = av_err2str(ret);
+                            if (demuxstatuscb_ != nullptr)
                             {
-                                // 不完整或者EOF
-                                break;
+                                demuxstatuscb_(DEMUXING, err, demuxstatuscbparam_);
                             }
-                            else if (ret < 0)
-                            {
-                                // 其他错误
-                                err = av_err2str(ret);
-                                break;
-                            }
-                            else
-                            {
-                                demuxpacketcb_(packet, av_rescale_q_rnd(packet->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), demuxpacketcbparam_);
-                                continue;
-                            }
+                            break;
+                        }
+                        else
+                        {
+                            demuxpacketcb_(packet, av_rescale_q_rnd(packet->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), demuxpacketcbparam_);
+                        }
                     }
                 }
                 else

@@ -1,5 +1,6 @@
 .vs
 tmp
+out.*
 *.exe
 *.bgr
 *.bgra

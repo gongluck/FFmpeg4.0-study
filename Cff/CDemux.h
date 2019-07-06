@@ -37,7 +37,7 @@ public:
     enum STATUS { STOP, DEMUXING };
     // 状态通知回调声明
     typedef void (*DemuxStatusCallback)(STATUS status, const std::string& err, void* param);
-    // 解码帧回调声明
+    // 解封装帧回调声明
     typedef void (*DemuxPacketCallback)(const AVPacket* packet, int64_t timestamp, void* param);
 
     // 设置输入
@@ -45,9 +45,9 @@ public:
     // 获取输入
     const std::string& get_input(std::string& err);
 
-    // 设置解码帧回调 
+    // 设置解封装帧回调 
     bool set_demux_callback(DemuxPacketCallback cb, void* param, std::string& err);
-    // 设置解码状态变化回调
+    // 设置解封装状态变化回调
     bool set_demux_status_callback(DemuxStatusCallback cb, void* param, std::string& err);
 
     // 打开输入
