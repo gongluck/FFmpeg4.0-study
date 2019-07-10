@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="Cff\CDecode.cpp" />
     <ClCompile Include="Cff\CDemux.cpp" />
+    <ClCompile Include="Cff\CEncode.cpp" />
     <ClCompile Include="Cff\COutput.cpp" />
     <ClCompile Include="Cff\CSwr.cpp" />
     <ClCompile Include="Cff\CSws.cpp" />
@@ -29,6 +30,7 @@
   <ItemGroup>
     <ClInclude Include="Cff\CDecode.h" />
     <ClInclude Include="Cff\CDemux.h" />
+    <ClInclude Include="Cff\CEncode.h" />
     <ClInclude Include="Cff\common.h" />
     <ClInclude Include="Cff\COutput.h" />
     <ClInclude Include="Cff\CSwr.h" />

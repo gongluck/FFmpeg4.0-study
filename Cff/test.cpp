@@ -15,6 +15,7 @@
 #include "CSws.h"
 #include "CSwr.h"
 #include "COutput.h"
+#include "CEncode.h"
 #include <iostream>
 #include <fstream>
 
@@ -161,7 +162,13 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
         static std::ofstream video("out.bgra", std::ios::binary | std::ios::trunc);
         video.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0] * frame->height);
     }
-}         
+}      
+
+void EncVideoFrameCB(const AVPacket* packet, void* param)
+{
+    static std::ofstream h264("encode.h264", std::ios::binary);
+    h264.write(reinterpret_cast<char*>(packet->data), packet->size);
+}
 
 void DecAudioFrameCB(const AVFrame* frame, void* param)
 {
@@ -633,6 +640,50 @@ void test_output_mp3()
     TESTCHECKRET(ret);
 }
 
+// 编码h264
+void test_encode_h264()
+{
+    bool ret = false;
+    std::string err;
+    // out.yuv这个文件太大了，没有上传github，可以用解码的例子生产
+    std::ifstream yuv("out.yuv", std::ios::binary);
+    char buf[414720] = { 0 };
+    CEncode encode;
+
+    ret = encode.set_enc_callback(EncVideoFrameCB, nullptr, err);
+    TESTCHECKRET(ret);
+    ret = encode.set_encodeid(AV_CODEC_ID_H264, err);
+    TESTCHECKRET(ret);
+    ret = encode.set_video_param(400000, 640, 432, { 1,25 }, { 25,1 }, 20, 10, AV_PIX_FMT_YUV420P, err);
+    TESTCHECKRET(ret);
+    
+    auto frame = av_frame_alloc();
+    frame->width = 640;
+    frame->height = 432;
+    frame->format = AV_PIX_FMT_YUV420P;
+    av_frame_get_buffer(frame, 1);
+    
+    while (!yuv.eof())
+    {
+        yuv.read(buf, 414720);
+        av_frame_make_writable(frame);
+        memcpy(frame->data[0], buf, frame->linesize[0] * frame->height);
+        memcpy(frame->data[1], buf + frame->linesize[0] * frame->height, frame->linesize[1] * frame->height / 2);
+        memcpy(frame->data[2], buf + frame->linesize[0] * frame->height *5 / 4, frame->linesize[2] * frame->height/2);
+        
+        //static int i = 0;
+        //frame->pts = i++;
+        
+        ret = encode.encode(frame, err);
+        TESTCHECKRET(ret);
+    }
+
+    av_frame_free(&frame);
+
+    ret = encode.close(err);
+    TESTCHECKRET(ret);
+}
+
 int main()
 {
     //test_demux();
@@ -646,5 +697,6 @@ int main()
     //test_output_h264();
     //test_output_aac();
     //test_output_mp3();
+    //test_encode_h264();
     return 0;
 }

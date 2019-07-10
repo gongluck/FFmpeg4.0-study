@@ -1,6 +1,8 @@
 .vs
 tmp
 out.*
+encode.*
+save.*
 *.exe
 *.db
 *.ipch
