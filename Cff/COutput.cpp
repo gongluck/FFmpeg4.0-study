@@ -15,6 +15,8 @@
 
 COutput::~COutput()
 {
+    std::string err;
+    close(err);
 }
 
 bool COutput::set_output(const std::string& output, std::string& err)
@@ -81,6 +83,12 @@ bool COutput::open(std::string& err)
     err = "opt succeed.";
     int ret = 0;
 
+    if (fmt_ == nullptr)
+    {
+        err = "fmt_ is nullptr.";
+        return false;
+    }
+
     ret = avio_open2(&fmt_->pb, output_.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr);
     CHECKFFRET(ret);
 
@@ -117,6 +125,8 @@ bool COutput::close(std::string& err)
     CHECKFFRET(ret);
     avformat_free_context(fmt_);
     fmt_ = nullptr;
+
+    status_ = STOP;
 
     return true;
 }
