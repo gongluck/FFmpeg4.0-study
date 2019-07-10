@@ -14,6 +14,7 @@
 #include "CDecode.h"
 #include "CSws.h"
 #include "CSwr.h"
+#include "COutput.h"
 #include <iostream>
 #include <fstream>
 
@@ -21,6 +22,8 @@
 
 int g_vindex = -1;
 int g_aindex = -1;
+int g_vindex_output = -1;
+int g_aindex_output = -1;
 
 #define TESTCHECKRET(ret)\
 if(!ret)\
@@ -70,6 +73,26 @@ void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
         if (out.is_open())
         {
             out.write(reinterpret_cast<char*>(const_cast<uint8_t*>(packet->data)), packet->size);
+        }
+    }
+}
+
+void DemuxPacketCB_save(const AVPacket* packet, int64_t timestamp, void* param)
+{
+    std::string err;
+    auto output = static_cast<COutput*>(param);
+    if (output == nullptr)
+    {
+        return;
+    }
+    if (packet->stream_index == g_vindex || 
+        packet->stream_index == g_aindex)
+    {
+        auto pkt = const_cast<AVPacket*>(packet);
+        pkt->stream_index = g_vindex_output == -1 ? g_aindex_output : g_vindex_output;
+        if (!output->write_frame(pkt, err))
+        {
+            std::cerr << err << std::endl;
         }
     }
 }
@@ -475,6 +498,141 @@ void test_systemsound()
     TESTCHECKRET(ret);
 }
 
+// 输出h264
+void test_output_h264()
+{
+    bool ret = false;
+    std::string err;
+    CDemux demux;
+    COutput output;
+
+    ret = demux.set_input("in.flv", err);
+    TESTCHECKRET(ret);
+    ret = demux.set_demux_callback(DemuxPacketCB_save, &output, err);
+    TESTCHECKRET(ret);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux, err);
+    TESTCHECKRET(ret);
+
+    ret = demux.openinput(err);
+    TESTCHECKRET(ret);
+
+    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+    std::cout << err << std::endl;
+
+    auto par = demux.get_steam_par(g_vindex, err);
+    TESTCHECKRET(ret);
+
+    ret = output.set_output("out.h264", err);
+    TESTCHECKRET(ret);
+    g_vindex_output = output.add_stream(par->codec_id, err);
+    output.copy_param(g_vindex_output, par, err);
+    TESTCHECKRET(ret);
+    ret = output.open(err);
+    TESTCHECKRET(ret);
+
+    ret = demux.begindemux(err);
+    TESTCHECKRET(ret);
+
+    std::cout << "input to stop demuxing." << std::endl;
+    std::cin.get();
+
+    ret = output.close(err);
+    TESTCHECKRET(ret);
+
+    ret = demux.stopdemux(err);
+    TESTCHECKRET(ret);
+}
+
+// 输出aac
+void test_output_aac()
+{
+    bool ret = false;
+    std::string err;
+    CDemux demux;
+    COutput output;
+
+    ret = demux.set_input("in.flv", err);
+    TESTCHECKRET(ret);
+    ret = demux.set_demux_callback(DemuxPacketCB_save, &output, err);
+    TESTCHECKRET(ret);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux, err);
+    TESTCHECKRET(ret);
+
+    ret = demux.openinput(err);
+    TESTCHECKRET(ret);
+
+    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    std::cout << err << std::endl;
+
+    auto par = demux.get_steam_par(g_aindex, err);
+    TESTCHECKRET(ret);
+
+    ret = output.set_output("out.aac", err);
+    TESTCHECKRET(ret);
+    g_aindex_output = output.add_stream(par->codec_id, err);
+    output.copy_param(g_aindex_output, par, err);
+    TESTCHECKRET(ret);
+    ret = output.open(err);
+    TESTCHECKRET(ret);
+
+    ret = demux.begindemux(err);
+    TESTCHECKRET(ret);
+
+    std::cout << "input to stop demuxing." << std::endl;
+    std::cin.get();
+
+    ret = output.close(err);
+    TESTCHECKRET(ret);
+
+    ret = demux.stopdemux(err);
+    TESTCHECKRET(ret);
+}
+
+// 输出mp3
+void test_output_mp3()
+{
+    bool ret = false;
+    std::string err;
+    CDemux demux;
+    COutput output;
+
+    ret = demux.set_input("in.mkv", err);
+    TESTCHECKRET(ret);
+    ret = demux.set_demux_callback(DemuxPacketCB_save, &output, err);
+    TESTCHECKRET(ret);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux, err);
+    TESTCHECKRET(ret);
+
+    ret = demux.openinput(err);
+    TESTCHECKRET(ret);
+
+    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    std::cout << err << std::endl;
+
+    auto par = demux.get_steam_par(g_aindex, err);
+    TESTCHECKRET(ret);
+
+    ret = output.set_output("out.mp3", err);
+    TESTCHECKRET(ret);
+    g_aindex_output = output.add_stream(par->codec_id, err);
+    output.copy_param(g_aindex_output, par, err);
+    TESTCHECKRET(ret);
+    ret = output.open(err);
+    TESTCHECKRET(ret);
+
+    ret = demux.begindemux(err);
+    TESTCHECKRET(ret);
+
+    std::cout << "input to stop demuxing." << std::endl;
+    std::cin.get();
+
+    ret = output.close(err);
+    TESTCHECKRET(ret);
+
+    ret = demux.stopdemux(err);
+    TESTCHECKRET(ret);
+}
+
 int main()
 {
     //test_demux();
@@ -485,5 +643,8 @@ int main()
     //test_swr();
     //test_desktop();
     //test_systemsound();
+    //test_output_h264();
+    //test_output_aac();
+    //test_output_mp3();
     return 0;
 }
