@@ -39,9 +39,12 @@ public:
 
     // 添加流
     int add_stream(AVCodecID id, std::string& err);
+    // 获取时基
+    AVRational get_timebase(int index, std::string& err);
 
     // 设置编码器
     bool copy_param(int index, const AVCodecParameters* par, std::string& err);
+    bool copy_param(int index, const AVCodecContext* codectx, std::string& err);
 
     // 打开输出
     bool open(std::string& err);

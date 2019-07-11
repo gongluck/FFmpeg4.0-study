@@ -3,6 +3,9 @@ tmp
 out.*
 encode.*
 save.*
+record.*
+capture.*
+test.*
 *.exe
 *.db
 *.ipch

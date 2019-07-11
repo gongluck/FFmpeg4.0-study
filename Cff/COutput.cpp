@@ -63,6 +63,19 @@ int COutput::add_stream(AVCodecID id, std::string& err)
     return stream->index;
 }
 
+AVRational COutput::get_timebase(int index, std::string& err)
+{
+    LOCK();
+    if (this->status_ == STOP)
+    {
+        err = "status is stop."; 
+        return {0}; 
+    }
+    err = "opt succeed.";
+
+    return fmt_->streams[index]->time_base;
+}
+
 bool COutput::copy_param(int index, const AVCodecParameters* par, std::string& err)
 {
     LOCK();
@@ -71,6 +84,19 @@ bool COutput::copy_param(int index, const AVCodecParameters* par, std::string& e
     int ret = 0;
 
     ret = avcodec_parameters_copy(fmt_->streams[index]->codecpar, par);
+    CHECKFFRET(ret);
+
+    return true;
+}    
+
+bool COutput::copy_param(int index, const AVCodecContext* codectx, std::string& err)
+{
+    LOCK();
+    CHECKSTOP(err);
+    err = "opt succeed.";
+    int ret = 0;
+
+    ret = avcodec_parameters_from_context(fmt_->streams[index]->codecpar, codectx);
     CHECKFFRET(ret);
 
     return true;

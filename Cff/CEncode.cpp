@@ -111,6 +111,11 @@ bool CEncode::set_audio_param(int64_t bitrate, int samplerate, uint64_t channell
     return true;
 }
 
+const AVCodecContext* CEncode::get_codectx(std::string& err)
+{
+    return codectx_;
+}
+
 bool CEncode::encode(const AVFrame* frame, std::string& err)
 {
     LOCK();
