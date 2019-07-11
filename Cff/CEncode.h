@@ -42,6 +42,8 @@ public:
 
     // 设置视频参数
     bool set_video_param(int64_t bitrate, int width, int height, AVRational timebase, AVRational framerate, int gop, int maxbframes, AVPixelFormat fmt, std::string& err);
+    // 设置音频参数
+    bool set_audio_param(int64_t bitrate, int samplerate, uint64_t channellayout, int channels, AVSampleFormat fmt, int& framesize, std::string& err);
     
     // 编码
     bool encode(const AVFrame* frame, std::string& err);

@@ -82,6 +82,33 @@ bool CEncode::set_video_param(int64_t bitrate, int width, int height, AVRational
     CHECKFFRET(ret);
 
     return true;
+}   
+
+bool CEncode::set_audio_param(int64_t bitrate, int samplerate, uint64_t channellayout, int channels, AVSampleFormat fmt, int& framesize, std::string& err)
+{
+    LOCK();
+    err = "opt succeed.";
+    int ret;
+
+    if (codectx_ == nullptr)
+    {
+        err = "codectx_ is nullptr.";
+        return false;
+    }
+
+    codectx_->bit_rate = bitrate;
+    codectx_->sample_rate = samplerate;
+    codectx_->channel_layout = channellayout;
+    codectx_->channels = channels;
+    codectx_->sample_fmt = fmt;
+    codectx_->codec_type = AVMEDIA_TYPE_AUDIO;
+
+    ret = avcodec_open2(codectx_, codec_, nullptr);
+    CHECKFFRET(ret);
+
+    framesize = codectx_->frame_size;
+
+    return true;
 }
 
 bool CEncode::encode(const AVFrame* frame, std::string& err)
@@ -106,6 +133,7 @@ bool CEncode::encode(const AVFrame* frame, std::string& err)
         {
             encframecb_(&pkt_, encframecbparam_);
         }
+        av_packet_unref(&pkt_);
     }
 
     return true;
@@ -116,6 +144,10 @@ bool CEncode::close(std::string& err)
     LOCK();
     err = "opt succeed.";
 
+    if (codectx_ != nullptr)
+    {
+        CHECKFFRET(encode(nullptr, err));
+    }
     avcodec_free_context(&codectx_);
 
     return true;

@@ -164,12 +164,6 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
     }
 }      
 
-void EncVideoFrameCB(const AVPacket* packet, void* param)
-{
-    static std::ofstream h264("encode.h264", std::ios::binary);
-    h264.write(reinterpret_cast<char*>(packet->data), packet->size);
-}
-
 void DecAudioFrameCB(const AVFrame* frame, void* param)
 {
     std::string err;
@@ -194,6 +188,18 @@ void DecAudioFrameCB(const AVFrame* frame, void* param)
         static std::ofstream audio("out.pcm", std::ios::binary | std::ios::trunc);
         audio.write(reinterpret_cast<const char*>(frame->data[0]), frame->linesize[0]);
     }
+}
+
+void EncVideoFrameCB(const AVPacket* packet, void* param)
+{
+    static std::ofstream h264("encode.h264", std::ios::binary);
+    h264.write(reinterpret_cast<char*>(packet->data), packet->size);
+} 
+
+void EncAudioFrameCB(const AVPacket* packet, void* param)
+{
+    static std::ofstream aac("encode.mp3", std::ios::binary);
+    aac.write(reinterpret_cast<char*>(packet->data), packet->size);
 }
 
 // 解封装
@@ -645,7 +651,7 @@ void test_encode_h264()
 {
     bool ret = false;
     std::string err;
-    // out.yuv这个文件太大了，没有上传github，可以用解码的例子生产
+    // out.yuv这个文件太大了，没有上传github，可以用解码的例子生成
     std::ifstream yuv("out.yuv", std::ios::binary);
     char buf[414720] = { 0 };
     CEncode encode;
@@ -654,7 +660,7 @@ void test_encode_h264()
     TESTCHECKRET(ret);
     ret = encode.set_encodeid(AV_CODEC_ID_H264, err);
     TESTCHECKRET(ret);
-    ret = encode.set_video_param(400000, 640, 432, { 1,25 }, { 25,1 }, 20, 10, AV_PIX_FMT_YUV420P, err);
+    ret = encode.set_video_param(400000, 640, 432, { 1,25 }, { 25,1 }, 5, 0, AV_PIX_FMT_YUV420P, err);
     TESTCHECKRET(ret);
     
     auto frame = av_frame_alloc();
@@ -671,9 +677,55 @@ void test_encode_h264()
         memcpy(frame->data[1], buf + frame->linesize[0] * frame->height, frame->linesize[1] * frame->height / 2);
         memcpy(frame->data[2], buf + frame->linesize[0] * frame->height *5 / 4, frame->linesize[2] * frame->height/2);
         
-        //static int i = 0;
-        //frame->pts = i++;
+        static int i = 0;
+        frame->pts = i++;
         
+        ret = encode.encode(frame, err);
+        TESTCHECKRET(ret);
+    }
+
+    av_frame_free(&frame);
+
+    ret = encode.close(err);
+    TESTCHECKRET(ret);
+}
+
+// 编码mp3
+void test_encode_mp3()
+{
+    bool ret = false;
+    std::string err;
+    // out.pcm这个文件太大了，没有上传github，可以用解码的例子生成
+    std::ifstream pcm("out.pcm", std::ios::binary);
+    char buf[10240] = { 0 };
+    CEncode encode;
+    int framesize = 0;
+
+    ret = encode.set_enc_callback(EncAudioFrameCB, nullptr, err);
+    TESTCHECKRET(ret);
+    ret = encode.set_encodeid(AV_CODEC_ID_MP3, err);
+    TESTCHECKRET(ret);
+    ret = encode.set_audio_param(64000, 44100, AV_CH_LAYOUT_STEREO, 2, AV_SAMPLE_FMT_FLTP, framesize, err);
+    TESTCHECKRET(ret);
+
+    auto frame = av_frame_alloc();
+    frame->nb_samples = framesize;
+    frame->format = AV_SAMPLE_FMT_FLTP;
+    frame->channel_layout = AV_CH_LAYOUT_STEREO;
+    auto size = av_get_bytes_per_sample(static_cast<AVSampleFormat>(frame->format));
+    av_frame_get_buffer(frame, 0);
+
+    while (!pcm.eof())
+    {
+        pcm.read(buf, framesize * size * av_get_channel_layout_nb_channels(frame->channel_layout));
+        av_frame_make_writable(frame);
+
+        for (int i = 0; i < frame->nb_samples; ++i)
+        {
+            memcpy(frame->data[0] + size * i, buf + size * (2 * i), size);
+            memcpy(frame->data[1] + size * i, buf + size * (2 * i + 1), size);
+        }
+
         ret = encode.encode(frame, err);
         TESTCHECKRET(ret);
     }
@@ -698,5 +750,6 @@ int main()
     //test_output_aac();
     //test_output_mp3();
     //test_encode_h264();
+    //test_encode_mp3();
     return 0;
 }
