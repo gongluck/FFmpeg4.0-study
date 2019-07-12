@@ -981,9 +981,128 @@ void test_record()
     TESTCHECKRET(ret);
 }
 
+// 录屏录音
+void test_capture_record()
+{
+    bool ret = false;
+    std::string err;
+    CDemux demuxdesktop;
+    CDecode decodedesktop;
+    CEncode encodedesktop;
+    CDemux demuxsound;
+    CDecode decodesound;
+    CEncode encodesound;
+    COutput output;
+
+    //采集桌面
+    ret = demuxdesktop.device_register_all(err);
+    TESTCHECKRET(ret);
+    ret = demuxdesktop.set_input_format("gdigrab", err); //采集桌面
+    TESTCHECKRET(ret);
+    ret = demuxdesktop.set_dic_opt("framerate", "10", err);
+    TESTCHECKRET(ret);
+    ret = demuxdesktop.set_demux_callback(DemuxDesktopCB, &decodedesktop, err);
+    TESTCHECKRET(ret);
+    ret = demuxdesktop.set_demux_status_callback(DemuxStatusCB, nullptr, err);
+    TESTCHECKRET(ret);
+    ret = demuxdesktop.set_input("desktop", err);
+    TESTCHECKRET(ret);
+    ret = demuxdesktop.openinput(err);
+    TESTCHECKRET(ret);
+
+    g_vindex = demuxdesktop.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+    std::cout << err << std::endl;
+
+    ret = decodedesktop.set_dec_callback(DecVideoFrameCB, &encodedesktop, err);
+    TESTCHECKRET(ret);
+    ret = decodedesktop.copy_param(demuxdesktop.get_steam_par(g_vindex, err), err);
+    TESTCHECKRET(ret);
+    ret = decodedesktop.codec_open(err);
+    TESTCHECKRET(ret);
+
+    // 采集系统声音
+    ret = demuxsound.device_register_all(err);
+    TESTCHECKRET(ret);
+    ret = demuxsound.set_input_format("dshow", err); //采集声卡
+    TESTCHECKRET(ret);
+    ret = demuxsound.set_dic_opt("framerate", "15", err);
+    TESTCHECKRET(ret);
+    ret = demuxsound.set_demux_callback(DemuxSystemSoundCB, &decodesound, err);
+    TESTCHECKRET(ret);
+    ret = demuxsound.set_demux_status_callback(DemuxStatusCB, nullptr, err);
+    TESTCHECKRET(ret);
+    ret = demuxsound.set_input("audio=virtual-audio-capturer", err);
+    TESTCHECKRET(ret);
+    ret = demuxsound.openinput(err);
+    TESTCHECKRET(ret);
+
+    g_aindex = demuxsound.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    std::cout << err << std::endl;
+
+    ret = decodesound.set_dec_callback(DecAudioFrameCB, &encodesound, err);
+    TESTCHECKRET(ret);
+    ret = decodesound.copy_param(demuxsound.get_steam_par(g_aindex, err), err);
+    TESTCHECKRET(ret);
+    ret = decodesound.codec_open(err);
+    TESTCHECKRET(ret);
+
+    // 编码h264
+    ret = encodedesktop.set_enc_callback(EncVideoFrameCB, &output, err);
+    TESTCHECKRET(ret);
+    ret = encodedesktop.set_encodeid(AV_CODEC_ID_H264, err);
+    TESTCHECKRET(ret);
+    ret = encodedesktop.set_video_param(40000000, 1920, 1080, { 1,10 }, { 10,1 }, 5, 0, AV_PIX_FMT_YUV420P, err);
+    TESTCHECKRET(ret);
+
+    // 编码
+    ret = encodesound.set_enc_callback(EncAudioFrameCB, &output, err);
+    TESTCHECKRET(ret);
+    ret = encodesound.set_encodeid(AV_CODEC_ID_AAC, err);
+    TESTCHECKRET(ret);
+    ret = encodesound.set_audio_param(64000, 44100, AV_CH_LAYOUT_STEREO, 2, AV_SAMPLE_FMT_FLTP, g_framesize, err);
+    TESTCHECKRET(ret);
+    std::cout << "framesize : " << g_framesize << std::endl;
+    std::cout << "one framesize : " << av_samples_get_buffer_size(nullptr, 2, g_framesize, AV_SAMPLE_FMT_FLTP, 1) << std::endl;
+
+    // 输出
+    ret = output.set_output("capture.mp4", err);
+    TESTCHECKRET(ret);
+    g_vindex_output = output.add_stream(AV_CODEC_ID_H264, err);
+    TESTCHECKRET(ret);
+    ret = output.copy_param(g_vindex_output, encodedesktop.get_codectx(err), err);
+    TESTCHECKRET(ret);
+    g_aindex_output = output.add_stream(AV_CODEC_ID_AAC, err);
+    TESTCHECKRET(ret);
+    ret = output.copy_param(g_aindex_output, encodesound.get_codectx(err), err);
+    TESTCHECKRET(ret);
+
+    // 开始
+    ret = output.open(err);
+    TESTCHECKRET(ret);
+    ret = demuxdesktop.begindemux(err);
+    TESTCHECKRET(ret);
+    ret = demuxsound.begindemux(err);
+    TESTCHECKRET(ret);
+
+    std::cout << "input to stop demuxing." << std::endl;
+    std::cin.get();
+
+    // 结束
+    ret = demuxsound.stopdemux(err);
+    TESTCHECKRET(ret);
+    ret = encodesound.close(err);
+    TESTCHECKRET(ret);
+    ret = demuxdesktop.stopdemux(err);
+    TESTCHECKRET(ret);
+    ret = encodedesktop.close(err);
+    TESTCHECKRET(ret);
+    ret = output.close(err);
+    TESTCHECKRET(ret);
+}
+
 int main()
 {
-    test_demux();
+    //test_demux();
     //test_decode_h264();
     //test_decode_aac();
     //test_decode_mp3();
@@ -998,5 +1117,6 @@ int main()
     //test_encode_mp3();
     //test_screen_capture();
     //test_record();
+    //test_capture_record();
     return 0;
 }
