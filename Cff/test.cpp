@@ -21,6 +21,7 @@
 extern "C"
 {
 #include <libavutil/audio_fifo.h>
+#include <libavutil/time.h>
 }
 
 
@@ -45,9 +46,9 @@ void DemuxStatusCB(CDemux::STATUS status, const std::string& err, void* param)
 
 void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
 {
-    std::cout << std::this_thread::get_id() <<
+    /*std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
-        " timestamp : " << timestamp << std::endl;
+        " timestamp : " << timestamp << std::endl;*/
 
 #ifdef SEEK
     std::string err;
@@ -98,9 +99,9 @@ void DemuxPacketCB_save(const AVPacket* packet, int64_t timestamp, void* param)
 
 void DemuxDesktopCB(const AVPacket* packet, int64_t timestamp, void* param)
 {
-    std::cout << std::this_thread::get_id() <<
+    /*std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
-        " timestamp : " << timestamp << std::endl;
+        " timestamp : " << timestamp << std::endl;*/
 
     CDecode* decode = static_cast<CDecode*>(param);
     std::string err;
@@ -115,9 +116,9 @@ void DemuxDesktopCB(const AVPacket* packet, int64_t timestamp, void* param)
 
 void DemuxSystemSoundCB(const AVPacket* packet, int64_t timestamp, void* param)
 {
-    std::cout << std::this_thread::get_id() <<
+    /*std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
-        " timestamp : " << timestamp << std::endl;
+        " timestamp : " << timestamp << std::endl;*/
 
     CDecode* decode = static_cast<CDecode*>(param);
     std::string err;
@@ -138,18 +139,29 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
     {
         if (frame->format != AV_PIX_FMT_YUV420P)
         {
-            CSws sws;
-            AVFrame f = { 0 };
-            f.width = 1920;
-            f.height = 1080;
-            f.format = AV_PIX_FMT_YUV420P;
-            av_frame_get_buffer(&f, 1);
+            static bool binit = false;
+            static CSws sws;
+            static AVFrame f = { 0 };
+            if (!binit)
+            {
+                f.width = 1920;
+                f.height = 1080;
+                f.format = AV_PIX_FMT_YUV420P;
+                av_frame_get_buffer(&f, 1);
+
+                TESTCHECKRET(sws.set_src_opt(static_cast<AVPixelFormat>(frame->format), frame->width, frame->height, err));
+                TESTCHECKRET(sws.set_dst_opt(AV_PIX_FMT_YUV420P, 1920, 1080, err));
+                TESTCHECKRET(sws.lock_opt(err));
+
+                binit = true;
+            }
+            
             av_frame_make_writable(&f);
-            TESTCHECKRET(sws.set_src_opt(static_cast<AVPixelFormat>(frame->format), frame->width, frame->height, err));
-            TESTCHECKRET(sws.set_dst_opt(AV_PIX_FMT_YUV420P, 1920, 1080, err));
-            TESTCHECKRET(sws.lock_opt(err));
+            
             int lines = sws.scale(frame->data, frame->linesize, 0, frame->height, f.data, f.linesize, err);
-            std::cout << "sws " << lines << " lines." << std::endl;
+            //std::cout << "sws " << lines << " lines." << std::endl;
+            f.pts = frame->pts;
+            f.pkt_dts = frame->pkt_dts;
             TESTCHECKRET(enc->encode(&f, err));
             return;
         }
@@ -195,14 +207,21 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
         if (frame->format != AV_SAMPLE_FMT_FLTP)
         {
             static AVFrame fltp_frame = { 0 };
+            static AVFrame ff = { 0 };
             static CSwr swr;//static是修复杂音的关键!数据有缓存!
             static bool binit = false;
             if (!binit)
             {
-                fltp_frame.nb_samples = g_framesize;
+                fltp_frame.nb_samples = g_framesize>44100?g_framesize:44100;
                 fltp_frame.format = AV_SAMPLE_FMT_FLTP;
                 fltp_frame.channel_layout = AV_CH_LAYOUT_STEREO;
                 fltp_frame.sample_rate = 44100;
+                av_frame_get_buffer(&fltp_frame, 1);
+
+                ff.nb_samples = g_framesize;
+                ff.format = AV_SAMPLE_FMT_FLTP;
+                ff.channel_layout = AV_CH_LAYOUT_STEREO;
+                av_frame_get_buffer(&ff, 1);
 
                 TESTCHECKRET(swr.set_src_opt(AV_CH_LAYOUT_STEREO, frame->sample_rate, static_cast<AVSampleFormat>(frame->format), err));
                 TESTCHECKRET(swr.set_dst_opt(AV_CH_LAYOUT_STEREO, fltp_frame.sample_rate, static_cast<AVSampleFormat>(fltp_frame.format), err));
@@ -211,11 +230,10 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
                 binit = true;
             }
             
-            av_frame_get_buffer(&fltp_frame, 1);
             av_frame_make_writable(&fltp_frame);
             
             int samples = swr.convert(reinterpret_cast<uint8_t**>(&fltp_frame.data), fltp_frame.nb_samples, (const uint8_t**)(frame->data), frame->nb_samples, err);
-            std::cout << "convert samples : " << samples << std::endl;
+            //std::cout << "convert samples : " << samples << std::endl;
             fltp_frame.nb_samples = samples;
 
             // AAC输入大小有要求g_framesize
@@ -223,11 +241,6 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
             av_audio_fifo_write(fifo, reinterpret_cast<void**>(fltp_frame.data), fltp_frame.nb_samples);
             while (av_audio_fifo_size(fifo) >= g_framesize)
             {
-                static AVFrame ff = { 0 };
-                ff.nb_samples = g_framesize;
-                ff.format = AV_SAMPLE_FMT_FLTP;
-                ff.channel_layout = AV_CH_LAYOUT_STEREO;
-                av_frame_get_buffer(&ff, 1);
                 av_frame_make_writable(&ff);
                 av_audio_fifo_read(fifo, reinterpret_cast<void**>(ff.data), g_framesize);
                 TESTCHECKRET(enc->encode(&ff, err));
@@ -268,12 +281,10 @@ void EncVideoFrameCB(const AVPacket * packet, void* param)
     if (out != nullptr)
     {
         auto timebase = out->get_timebase(g_vindex_output, err);
-        static int i = 0;
+        static int64_t start = av_gettime();
         const_cast<AVPacket*>(packet)->stream_index = g_vindex_output;
-        const_cast<AVPacket*>(packet)->pts = av_rescale_q(i, { 1, 10 }, timebase);
+        const_cast<AVPacket*>(packet)->pts = av_rescale_q(av_gettime() - start, { 1, AV_TIME_BASE }, timebase);
         const_cast<AVPacket*>(packet)->dts = packet->pts;
-        const_cast<AVPacket*>(packet)->duration = av_rescale_q(1, { 1, 10 }, timebase);
-        i++;
         out->write_frame(const_cast<AVPacket*>(packet), err);
     }
     else
@@ -879,7 +890,7 @@ void test_screen_capture()
     TESTCHECKRET(ret);
     ret = encodedesktop.set_encodeid(AV_CODEC_ID_H264, err);
     TESTCHECKRET(ret);
-    ret = encodedesktop.set_video_param(40000000, 1920, 1080, { 1,10 }, { 10,1 }, 5, 0, AV_PIX_FMT_YUV420P, err);
+    ret = encodedesktop.set_video_param(0, 1920, 1080, { 1,10 }, { 10,1 }, 5, 0, AV_PIX_FMT_YUV420P, err);
     TESTCHECKRET(ret);
 
     // 输出
@@ -999,7 +1010,7 @@ void test_capture_record()
     TESTCHECKRET(ret);
     ret = demuxdesktop.set_input_format("gdigrab", err); //采集桌面
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_dic_opt("framerate", "10", err);
+    ret = demuxdesktop.set_dic_opt("framerate", "30", err);
     TESTCHECKRET(ret);
     ret = demuxdesktop.set_demux_callback(DemuxDesktopCB, &decodedesktop, err);
     TESTCHECKRET(ret);
@@ -1051,7 +1062,7 @@ void test_capture_record()
     TESTCHECKRET(ret);
     ret = encodedesktop.set_encodeid(AV_CODEC_ID_H264, err);
     TESTCHECKRET(ret);
-    ret = encodedesktop.set_video_param(40000000, 1920, 1080, { 1,10 }, { 10,1 }, 5, 0, AV_PIX_FMT_YUV420P, err);
+    ret = encodedesktop.set_video_param(0, 1920, 1080, { 1,30 }, { 30,1 }, 5, 0, AV_PIX_FMT_YUV420P, err);
     TESTCHECKRET(ret);
 
     // 编码
@@ -1090,9 +1101,9 @@ void test_capture_record()
     // 结束
     ret = demuxsound.stopdemux(err);
     TESTCHECKRET(ret);
-    ret = encodesound.close(err);
-    TESTCHECKRET(ret);
     ret = demuxdesktop.stopdemux(err);
+    TESTCHECKRET(ret);
+    ret = encodesound.close(err);
     TESTCHECKRET(ret);
     ret = encodedesktop.close(err);
     TESTCHECKRET(ret);
