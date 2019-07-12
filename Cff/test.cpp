@@ -194,44 +194,36 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
     {
         if (frame->format != AV_SAMPLE_FMT_FLTP)
         {
-            CSwr swr;
-            AVFrame f = { 0 };
-            f.nb_samples = g_framesize;
-            f.format = AV_SAMPLE_FMT_FLTP;
-            f.channel_layout = AV_CH_LAYOUT_STEREO;
-            av_frame_get_buffer(&f, 1);
-            av_frame_make_writable(&f);
-            TESTCHECKRET(swr.set_src_opt(AV_CH_LAYOUT_STEREO, frame->sample_rate, static_cast<AVSampleFormat>(frame->format), err));
-            TESTCHECKRET(swr.set_dst_opt(AV_CH_LAYOUT_STEREO, 44100, AV_SAMPLE_FMT_FLTP, err));
-            TESTCHECKRET(swr.lock_opt(err));
-
-            //// 分配音频数据内存
-            //static uint8_t** dst = nullptr;
-            //static int dstlinesize = 0;
-            //// 分配音频数据内存
-            //static int dstsize = av_samples_alloc_array_and_samples(&dst, &dstlinesize, 2, 44100, AV_SAMPLE_FMT_FLTP, 1);
-            //// 获取布局对应的通道数
-            //static int channel = av_get_channel_layout_nb_channels(AV_CH_LAYOUT_STEREO);
-
-            int samples = swr.convert(reinterpret_cast<uint8_t * *>(&f.data), f.nb_samples, (const uint8_t * *)(frame->data), frame->nb_samples, err);
-            //int samples = swr.convert(reinterpret_cast<uint8_t**>(dst), dstlinesize, (const uint8_t**)(frame->data), frame->nb_samples, err);
-            std::cout << "convert samples : " << samples << std::endl;
-
-            /*static std::ofstream audio("out.pcm", std::ios::binary | std::ios::trunc);
-            auto size = av_get_bytes_per_sample(static_cast<AVSampleFormat>(f.format));
-            for (int i = 0; i < samples; ++i)
+            static AVFrame fltp_frame = { 0 };
+            static CSwr swr;//static是修复杂音的关键!数据有缓存!
+            static bool binit = false;
+            if (!binit)
             {
-                for (int j = 0; j < f.channels; ++j)
-                {
-                    audio.write(reinterpret_cast<const char*>(dst[j] + size * i), size);
-                }
-            }*/
+                fltp_frame.nb_samples = g_framesize;
+                fltp_frame.format = AV_SAMPLE_FMT_FLTP;
+                fltp_frame.channel_layout = AV_CH_LAYOUT_STEREO;
+                fltp_frame.sample_rate = 44100;
 
-            static AVAudioFifo* fifo = av_audio_fifo_alloc(static_cast<AVSampleFormat>(f.format), av_get_channel_layout_nb_channels(f.channel_layout), f.nb_samples * 2);
-            av_audio_fifo_write(fifo, reinterpret_cast<void**>(f.data), samples);
+                TESTCHECKRET(swr.set_src_opt(AV_CH_LAYOUT_STEREO, frame->sample_rate, static_cast<AVSampleFormat>(frame->format), err));
+                TESTCHECKRET(swr.set_dst_opt(AV_CH_LAYOUT_STEREO, fltp_frame.sample_rate, static_cast<AVSampleFormat>(fltp_frame.format), err));
+                TESTCHECKRET(swr.lock_opt(err));
+
+                binit = true;
+            }
+            
+            av_frame_get_buffer(&fltp_frame, 1);
+            av_frame_make_writable(&fltp_frame);
+            
+            int samples = swr.convert(reinterpret_cast<uint8_t**>(&fltp_frame.data), fltp_frame.nb_samples, (const uint8_t**)(frame->data), frame->nb_samples, err);
+            std::cout << "convert samples : " << samples << std::endl;
+            fltp_frame.nb_samples = samples;
+
+            // AAC输入大小有要求g_framesize
+            static AVAudioFifo* fifo = av_audio_fifo_alloc(static_cast<AVSampleFormat>(fltp_frame.format), av_get_channel_layout_nb_channels(fltp_frame.channel_layout), fltp_frame.sample_rate * 2);
+            av_audio_fifo_write(fifo, reinterpret_cast<void**>(fltp_frame.data), fltp_frame.nb_samples);
             while (av_audio_fifo_size(fifo) >= g_framesize)
             {
-                AVFrame ff = { 0 };
+                static AVFrame ff = { 0 };
                 ff.nb_samples = g_framesize;
                 ff.format = AV_SAMPLE_FMT_FLTP;
                 ff.channel_layout = AV_CH_LAYOUT_STEREO;
@@ -240,7 +232,6 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
                 av_audio_fifo_read(fifo, reinterpret_cast<void**>(ff.data), g_framesize);
                 TESTCHECKRET(enc->encode(&ff, err));
             }
-
             return;
         }
     }
@@ -298,7 +289,12 @@ void EncAudioFrameCB(const AVPacket * packet, void* param)
     COutput* out = static_cast<COutput*>(param);
     if (out != nullptr)
     {
+        auto timebase = out->get_timebase(g_aindex_output, err);
+        static uint64_t nextpts = 0;
         const_cast<AVPacket*>(packet)->stream_index = g_aindex_output;
+        const_cast<AVPacket*>(packet)->pts = nextpts;
+        const_cast<AVPacket*>(packet)->dts = nextpts;
+        nextpts += packet->duration;
         out->write_frame(const_cast<AVPacket*>(packet), err);
     }
     else
@@ -987,7 +983,7 @@ void test_record()
 
 int main()
 {
-    //test_demux();
+    test_demux();
     //test_decode_h264();
     //test_decode_aac();
     //test_decode_mp3();
@@ -1001,6 +997,6 @@ int main()
     //test_encode_h264();
     //test_encode_mp3();
     //test_screen_capture();
-    test_record();
+    //test_record();
     return 0;
 }
