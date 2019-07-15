@@ -118,6 +118,8 @@ bool COutput::open(std::string& err)
     ret = avio_open2(&fmt_->pb, output_.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr);
     CHECKFFRET(ret);
 
+    av_dump_format(fmt_, 0, output_.c_str(), 1);
+
     ret = avformat_write_header(fmt_, nullptr);
     CHECKFFRET(ret);
     status_ = OPENED;
@@ -149,8 +151,12 @@ bool COutput::close(std::string& err)
     CHECKFFRET(ret);
     ret = avio_closep(&fmt_->pb);
     CHECKFFRET(ret);
-    avformat_free_context(fmt_);
-    fmt_ = nullptr;
+    if (fmt_ != nullptr)
+    {
+        av_dump_format(fmt_, 0, output_.c_str(), 1);
+        avformat_free_context(fmt_);
+        fmt_ = nullptr;
+    }
 
     status_ = STOP;
 
