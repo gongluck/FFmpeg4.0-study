@@ -203,6 +203,7 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
 
 void DecAudioFrameCB(const AVFrame * frame, void* param)
 {
+    //std::cout << "got dec frame in DecAudioFrameCB..." << std::endl;
     std::string err;
     CEncode* enc = static_cast<CEncode*>(param);
     if (enc != nullptr)
@@ -215,7 +216,7 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
             static bool binit = false;
             if (!binit)
             {
-                fltp_frame.nb_samples = g_framesize>44100?g_framesize:44100;
+                fltp_frame.nb_samples = 44100;
                 fltp_frame.format = AV_SAMPLE_FMT_FLTP;
                 fltp_frame.channel_layout = AV_CH_LAYOUT_STEREO;
                 fltp_frame.sample_rate = 44100;
@@ -233,35 +234,46 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
                 binit = true;
             }
             
+            fltp_frame.nb_samples = 44100;
             av_frame_make_writable(&fltp_frame);
             
             int samples = swr.convert(reinterpret_cast<uint8_t**>(&fltp_frame.data), fltp_frame.nb_samples, (const uint8_t**)(frame->data), frame->nb_samples, err);
             //std::cout << "convert samples : " << samples << std::endl;
+            if (samples <= 0)
+            {
+                std::cout << "convert samples : " << samples << std::endl;
+            }
             fltp_frame.nb_samples = samples;
 
             static int64_t start = av_gettime();
-            static int64_t next = start;
-            auto nexttmp = av_gettime();
+            static int64_t lastpts = -1;
 
             // AAC输入大小有要求g_framesize
             static AVAudioFifo* fifo = av_audio_fifo_alloc(static_cast<AVSampleFormat>(fltp_frame.format), av_get_channel_layout_nb_channels(fltp_frame.channel_layout), fltp_frame.sample_rate * 2);
             av_audio_fifo_write(fifo, reinterpret_cast<void**>(fltp_frame.data), fltp_frame.nb_samples);
             while (av_audio_fifo_size(fifo) >= g_framesize)
             {
+                auto pts = av_gettime() - start;
+                if (pts <= lastpts)
+                {
+                    pts = lastpts + 1;
+                }
                 av_frame_make_writable(&ff);
                 av_audio_fifo_read(fifo, reinterpret_cast<void**>(ff.data), g_framesize);
-                ff.pts = next - start;
-                ff.pkt_dts = next - start;
-                ff.pkt_duration = nexttmp - next;
-                next = nexttmp;
+                ff.pts = pts;
+                ff.pkt_dts = ff.pts;
+                ff.pkt_duration = av_rescale_q(g_framesize, { 1, 44100 }, { 1, AV_TIME_BASE });
+                ff.pkt_pos = -1;
+                lastpts = pts;
                 TESTCHECKRET(enc->encode(&ff, err));
             }
             return;
         }
-    }
-    else
-    {
-        //TESTCHECKRET(enc->encode(frame, err));
+        else
+        {
+            TESTCHECKRET(enc->encode(frame, err));
+            return;
+        }
     }
 
     if (frame->format == AV_SAMPLE_FMT_FLTP)
@@ -310,6 +322,7 @@ void EncVideoFrameCB(const AVPacket * packet, void* param)
 
 void EncAudioFrameCB(const AVPacket * packet, void* param)
 {
+    //std::cout << "got enc frame in EncAudioFrameCB..." << std::endl;
     std::string err;
     COutput* out = static_cast<COutput*>(param);
     if (out != nullptr)
@@ -319,6 +332,7 @@ void EncAudioFrameCB(const AVPacket * packet, void* param)
         const_cast<AVPacket*>(packet)->pts = av_rescale_q(packet->pts, { 1, AV_TIME_BASE }, timebase);
         const_cast<AVPacket*>(packet)->dts = av_rescale_q(packet->dts, { 1, AV_TIME_BASE }, timebase);
         const_cast<AVPacket*>(packet)->duration = av_rescale_q(packet->duration, { 1, AV_TIME_BASE }, timebase);
+        //std::cout << "pts : " << 1.0 * packet->pts * timebase.num / timebase.den << std::endl;
         out->write_frame(const_cast<AVPacket*>(packet), err);
     }
     else
@@ -1126,6 +1140,7 @@ void test_capture_record()
 
 int main()
 {
+    //av_log_set_level(AV_LOG_MAX_OFFSET);
     //test_demux();
     //test_decode_h264();
     //test_decode_aac();
