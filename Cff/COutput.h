@@ -35,25 +35,25 @@ public:
     enum STATUS { STOP, OPENED };
 
     // 设置输入
-    bool set_output(const std::string& output, std::string& err);
+    int set_output(const std::string& output);
 
     // 添加流
-    int add_stream(AVCodecID id, std::string& err);
+    int add_stream(AVCodecID id, int& index);
     // 获取时基
-    AVRational get_timebase(int index, std::string& err);
+    int get_timebase(int index, AVRational& timebase);
 
     // 设置编码器
-    bool copy_param(int index, const AVCodecParameters* par, std::string& err);
-    bool copy_param(int index, const AVCodecContext* codectx, std::string& err);
+    int copy_param(int index, const AVCodecParameters* par);
+    int copy_param(int index, const AVCodecContext* codectx);
 
     // 打开输出
-    bool open(std::string& err);
+    int open();
 
     // 写数据
-    bool write_frame(AVPacket* packet, std::string& err);
+    int write_frame(AVPacket* packet);
 
     // 关闭输出
-    bool close(std::string& err);
+    int close();
 
 private:
     STATUS status_ = STOP;

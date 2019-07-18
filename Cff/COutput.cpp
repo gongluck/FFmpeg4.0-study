@@ -15,150 +15,135 @@
 
 COutput::~COutput()
 {
-    std::string err;
-    close(err);
+    close();
 }
 
-bool COutput::set_output(const std::string& output, std::string& err)
+int COutput::set_output(const std::string& output)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     if (output.empty())
     {
-        err = "output is empty.";
-        return false;
+        return EINVAL;
     }
     else
     {
         output_ = output;
-        return true;
+        return 0;
     }
 }
 
-int COutput::add_stream(AVCodecID id, std::string& err)
+int COutput::add_stream(AVCodecID id, int& index)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
+    if (output_.empty())
+    {
+        return EINVAL;
+    }
     if (fmt_ == nullptr)
     {
         CHECKFFRET(avformat_alloc_output_context2(&fmt_, nullptr, nullptr, output_.c_str()));
     }
+
     AVCodec* codec = avcodec_find_encoder(id);
     if (codec == nullptr)
     {
-        err = "can not find encoder of " + id;
-        return false;
+        return EINVAL;
     }
 
     AVStream* stream = avformat_new_stream(fmt_, codec);
     if (stream == nullptr)
     {
-        err = "avformat_new_stream return nullptr.";
-        return false;
+        return AVERROR_BUG;
     }
-    return stream->index;
+    index = stream->index;
+    return 0;
 }
 
-AVRational COutput::get_timebase(int index, std::string& err)
+int COutput::get_timebase(int index, AVRational& timebase)
 {
     LOCK();
-    if (this->status_ == STOP)
+    CHECKNOTSTOP();
+
+    timebase = fmt_->streams[index]->time_base;
+    return 0;
+}
+
+int COutput::copy_param(int index, const AVCodecParameters* par)
+{
+    LOCK();
+    CHECKSTOP();
+    
+    if (fmt_ == nullptr || fmt_->nb_streams <= index)
     {
-        err = "status is stop."; 
-        return {0}; 
+        return EINVAL;
     }
-    err = "opt succeed.";
 
-    return fmt_->streams[index]->time_base;
-}
-
-bool COutput::copy_param(int index, const AVCodecParameters* par, std::string& err)
-{
-    LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
-    int ret = 0;
-
-    ret = avcodec_parameters_copy(fmt_->streams[index]->codecpar, par);
-    CHECKFFRET(ret);
-
-    return true;
+    return avcodec_parameters_copy(fmt_->streams[index]->codecpar, par);
 }    
 
-bool COutput::copy_param(int index, const AVCodecContext* codectx, std::string& err)
+int COutput::copy_param(int index, const AVCodecContext* codectx)
 {
     LOCK();
     CHECKSTOP(err);
-    err = "opt succeed.";
-    int ret = 0;
-
-    ret = avcodec_parameters_from_context(fmt_->streams[index]->codecpar, codectx);
-    CHECKFFRET(ret);
-
-    return true;
+    
+    if (fmt_ == nullptr || fmt_->nb_streams <= index)
+    {
+        return EINVAL;
+    }
+    
+    return avcodec_parameters_from_context(fmt_->streams[index]->codecpar, codectx);
 }
 
-bool COutput::open(std::string& err)
+int COutput::open()
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
-    int ret = 0;
+    CHECKSTOP();
 
-    if (fmt_ == nullptr)
+    if (fmt_ == nullptr || output_.empty())
     {
-        err = "fmt_ is nullptr.";
-        return false;
+        return EINVAL;
     }
 
-    ret = avio_open2(&fmt_->pb, output_.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr);
-    CHECKFFRET(ret);
+    CHECKFFRET(avio_open2(&fmt_->pb, output_.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr));
 
     av_dump_format(fmt_, 0, output_.c_str(), 1);
 
-    ret = avformat_write_header(fmt_, nullptr);
-    CHECKFFRET(ret);
+    CHECKFFRET(avformat_write_header(fmt_, nullptr));
     status_ = OPENED;
 
-    return true;
+    return 0;
 }
 
-bool COutput::write_frame(AVPacket* packet, std::string& err)
+int COutput::write_frame(AVPacket* packet)
 {
     LOCK();
-    CHECKNOTSTOP(err);
-    err = "opt succeed.";
-    int ret = 0;
+    CHECKNOTSTOP();
 
-    ret = av_interleaved_write_frame(fmt_, packet);
-    CHECKFFRET(ret);
-
-    return true;
+    if (fmt_ == nullptr)
+    {
+        return EINVAL;
+    }
+    return av_interleaved_write_frame(fmt_, packet);
 }
 
-bool COutput::close(std::string& err)
+int COutput::close()
 {
     LOCK();
-    CHECKNOTSTOP(err);
-    err = "opt succeed.";
-    int ret = 0;
+    CHECKNOTSTOP();
 
-    ret = av_write_trailer(fmt_);
-    CHECKFFRET(ret);
-    ret = avio_closep(&fmt_->pb);
-    CHECKFFRET(ret);
+    CHECKFFRET(av_write_trailer(fmt_));
+    CHECKFFRET(avio_closep(&fmt_->pb));
     if (fmt_ != nullptr)
     {
         av_dump_format(fmt_, 0, output_.c_str(), 1);
         avformat_free_context(fmt_);
         fmt_ = nullptr;
     }
-
     status_ = STOP;
 
-    return true;
+    return 0;
 }

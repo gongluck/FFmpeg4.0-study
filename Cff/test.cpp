@@ -79,7 +79,6 @@ void DemuxPacketCB(const AVPacket* packet, AVRational timebase, void* param)
 
 void DemuxPacketCB_save(const AVPacket* packet, AVRational timebase, void* param)
 {
-    std::string err;
     auto output = static_cast<COutput*>(param);
     if (output == nullptr)
     {
@@ -90,10 +89,7 @@ void DemuxPacketCB_save(const AVPacket* packet, AVRational timebase, void* param
     {
         auto pkt = const_cast<AVPacket*>(packet);
         pkt->stream_index = g_vindex_output == -1 ? g_aindex_output : g_vindex_output;
-        if (!output->write_frame(pkt, err))
-        {
-            std::cerr << err << std::endl;
-        }
+        TESTCHECKRET(output->write_frame(pkt));
     }
 }
 
@@ -300,7 +296,8 @@ void EncVideoFrameCB(const AVPacket * packet, void* param)
     COutput* out = static_cast<COutput*>(param);
     if (out != nullptr)
     {
-        auto timebase = out->get_timebase(g_vindex_output, err);
+        AVRational timebase = { 0 };
+        out->get_timebase(g_vindex_output, timebase);
         //static int64_t start = av_gettime();
         const_cast<AVPacket*>(packet)->stream_index = g_vindex_output;
         //const_cast<AVPacket*>(packet)->pts = av_rescale_q(av_gettime() - start, { 1, AV_TIME_BASE }, timebase);
@@ -308,7 +305,7 @@ void EncVideoFrameCB(const AVPacket * packet, void* param)
         const_cast<AVPacket*>(packet)->pts = av_rescale_q(packet->pts, { 1, AV_TIME_BASE }, timebase);
         const_cast<AVPacket*>(packet)->dts = av_rescale_q(packet->dts, { 1, AV_TIME_BASE }, timebase);
         const_cast<AVPacket*>(packet)->duration = av_rescale_q(packet->duration, { 1, AV_TIME_BASE }, timebase);
-        out->write_frame(const_cast<AVPacket*>(packet), err);
+        out->write_frame(const_cast<AVPacket*>(packet));
     }
     else
     {
@@ -324,13 +321,14 @@ void EncAudioFrameCB(const AVPacket * packet, void* param)
     COutput* out = static_cast<COutput*>(param);
     if (out != nullptr)
     {
-        auto timebase = out->get_timebase(g_aindex_output, err);
+        AVRational timebase = { 0 };
+        out->get_timebase(g_aindex_output, timebase);
         const_cast<AVPacket*>(packet)->stream_index = g_aindex_output;
         const_cast<AVPacket*>(packet)->pts = av_rescale_q(packet->pts, { 1, AV_TIME_BASE }, timebase);
         const_cast<AVPacket*>(packet)->dts = av_rescale_q(packet->dts, { 1, AV_TIME_BASE }, timebase);
         const_cast<AVPacket*>(packet)->duration = av_rescale_q(packet->duration, { 1, AV_TIME_BASE }, timebase);
         //std::cout << "pts : " << 1.0 * packet->pts * timebase.num / timebase.den << std::endl;
-        out->write_frame(const_cast<AVPacket*>(packet), err);
+        out->write_frame(const_cast<AVPacket*>(packet));
     }
     else
     {
@@ -654,8 +652,7 @@ void test_systemsound()
 // 输出h264
 void test_output_h264()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     CDemux demux;
     COutput output;
 
@@ -669,19 +666,19 @@ void test_output_h264()
     ret = demux.openinput();
     TESTCHECKRET(ret);
 
-    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
-    std::cout << err << std::endl;
+    ret = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
+    TESTCHECKRET(ret);
 
     const AVCodecParameters* par = nullptr;
     ret = demux.get_steam_par(g_vindex, par);
     TESTCHECKRET(ret);
 
-    ret = output.set_output("out.h264", err);
+    ret = output.set_output("out.h264");
     TESTCHECKRET(ret);
-    g_vindex_output = output.add_stream(par->codec_id, err);
-    output.copy_param(g_vindex_output, par, err);
+    ret = output.add_stream(par->codec_id, g_vindex_output);
+    output.copy_param(g_vindex_output, par);
     TESTCHECKRET(ret);
-    ret = output.open(err);
+    ret = output.open();
     TESTCHECKRET(ret);
 
     ret = demux.begindemux();
@@ -690,7 +687,7 @@ void test_output_h264()
     std::cout << "input to stop demuxing." << std::endl;
     std::cin.get();
 
-    ret = output.close(err);
+    ret = output.close();
     TESTCHECKRET(ret);
 
     ret = demux.stopdemux();
@@ -700,8 +697,7 @@ void test_output_h264()
 // 输出aac
 void test_output_aac()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     CDemux demux;
     COutput output;
 
@@ -715,19 +711,19 @@ void test_output_aac()
     ret = demux.openinput();
     TESTCHECKRET(ret);
 
-    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
-    std::cout << err << std::endl;
+    ret = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
+    TESTCHECKRET(ret);
 
     const AVCodecParameters* par = nullptr;
     ret = demux.get_steam_par(g_aindex, par);
     TESTCHECKRET(ret);
 
-    ret = output.set_output("out.aac", err);
+    ret = output.set_output("out.aac");
     TESTCHECKRET(ret);
-    g_aindex_output = output.add_stream(par->codec_id, err);
-    output.copy_param(g_aindex_output, par, err);
+    ret = output.add_stream(par->codec_id, g_aindex_output);
+    output.copy_param(g_aindex_output, par);
     TESTCHECKRET(ret);
-    ret = output.open(err);
+    ret = output.open();
     TESTCHECKRET(ret);
 
     ret = demux.begindemux();
@@ -736,7 +732,7 @@ void test_output_aac()
     std::cout << "input to stop demuxing." << std::endl;
     std::cin.get();
 
-    ret = output.close(err);
+    ret = output.close();
     TESTCHECKRET(ret);
 
     ret = demux.stopdemux();
@@ -746,8 +742,7 @@ void test_output_aac()
 // 输出mp3
 void test_output_mp3()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     CDemux demux;
     COutput output;
 
@@ -761,19 +756,19 @@ void test_output_mp3()
     ret = demux.openinput();
     TESTCHECKRET(ret);
 
-    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
-    std::cout << err << std::endl;
+    ret = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
+    TESTCHECKRET(ret);
 
     const AVCodecParameters* par = nullptr;
     ret = demux.get_steam_par(g_aindex, par);
     TESTCHECKRET(ret);
 
-    ret = output.set_output("out.mp3", err);
+    ret = output.set_output("out.mp3");
     TESTCHECKRET(ret);
-    g_aindex_output = output.add_stream(par->codec_id, err);
-    output.copy_param(g_aindex_output, par, err);
+    ret = output.add_stream(par->codec_id, g_aindex_output);
+    output.copy_param(g_aindex_output, par);
     TESTCHECKRET(ret);
-    ret = output.open(err);
+    ret = output.open();
     TESTCHECKRET(ret);
 
     ret = demux.begindemux();
@@ -782,7 +777,7 @@ void test_output_mp3()
     std::cout << "input to stop demuxing." << std::endl;
     std::cin.get();
 
-    ret = output.close(err);
+    ret = output.close();
     TESTCHECKRET(ret);
 
     ret = demux.stopdemux();
@@ -926,15 +921,15 @@ void test_screen_capture()
     TESTCHECKRET(ret);
 
     // 输出
-    ret = output.set_output("capture.mp4", err);
+    ret = output.set_output("capture.mp4");
     TESTCHECKRET(ret);
-    g_vindex_output = output.add_stream(AV_CODEC_ID_H264, err);
+    ret = output.add_stream(AV_CODEC_ID_H264, g_vindex_output);
     TESTCHECKRET(ret);
-    ret = output.copy_param(g_vindex_output, encodedesktop.get_codectx(err), err);
+    ret = output.copy_param(g_vindex_output, encodedesktop.get_codectx(err));
     TESTCHECKRET(ret);
 
     // 开始
-    ret = output.open(err);
+    ret = output.open();
     TESTCHECKRET(ret);
     ret = demuxdesktop.begindemux();
     TESTCHECKRET(ret);
@@ -947,7 +942,7 @@ void test_screen_capture()
     TESTCHECKRET(ret);
     ret = encodedesktop.close(err);
     TESTCHECKRET(ret);
-    ret = output.close(err);
+    ret = output.close();
     TESTCHECKRET(ret);
 }
 
@@ -1001,15 +996,15 @@ void test_record()
     //std::cin.get();
 
     // 输出
-    ret = output.set_output("record.aac", err);
+    ret = output.set_output("record.aac");
     TESTCHECKRET(ret);
-    g_aindex_output = output.add_stream(AV_CODEC_ID_AAC, err);
+    ret = output.add_stream(AV_CODEC_ID_AAC, g_aindex_output);
     TESTCHECKRET(ret);
-    ret = output.copy_param(g_aindex_output, encodesound.get_codectx(err), err);
+    ret = output.copy_param(g_aindex_output, encodesound.get_codectx(err));
     TESTCHECKRET(ret);
 
     // 开始
-    ret = output.open(err);
+    ret = output.open();
     TESTCHECKRET(ret);
     ret = demuxsound.begindemux();
     TESTCHECKRET(ret);
@@ -1022,7 +1017,7 @@ void test_record()
     TESTCHECKRET(ret);
     ret = encodesound.close(err);
     TESTCHECKRET(ret);
-    ret = output.close(err);
+    ret = output.close();
     TESTCHECKRET(ret);
 }
 
@@ -1113,19 +1108,19 @@ void test_capture_record()
     std::cout << "one framesize : " << av_samples_get_buffer_size(nullptr, 2, g_framesize, AV_SAMPLE_FMT_FLTP, 1) << std::endl;
 
     // 输出
-    ret = output.set_output("capture.mp4", err);
+    ret = output.set_output("capture.mp4");
     TESTCHECKRET(ret);
-    g_vindex_output = output.add_stream(AV_CODEC_ID_H264, err);
+    ret = output.add_stream(AV_CODEC_ID_H264, g_vindex_output);
     TESTCHECKRET(ret);
-    ret = output.copy_param(g_vindex_output, encodedesktop.get_codectx(err), err);
+    ret = output.copy_param(g_vindex_output, encodedesktop.get_codectx(err));
     TESTCHECKRET(ret);
-    g_aindex_output = output.add_stream(AV_CODEC_ID_AAC, err);
+    ret = output.add_stream(AV_CODEC_ID_AAC, g_aindex_output);
     TESTCHECKRET(ret);
-    ret = output.copy_param(g_aindex_output, encodesound.get_codectx(err), err);
+    ret = output.copy_param(g_aindex_output, encodesound.get_codectx(err));
     TESTCHECKRET(ret);
 
     // 开始
-    ret = output.open(err);
+    ret = output.open();
     TESTCHECKRET(ret);
     ret = demuxdesktop.begindemux();
     TESTCHECKRET(ret);
@@ -1144,7 +1139,7 @@ void test_capture_record()
     TESTCHECKRET(ret);
     ret = encodesound.close(err);
     TESTCHECKRET(ret);
-    ret = output.close(err);
+    ret = output.close();
     TESTCHECKRET(ret);
 }
 
@@ -1158,10 +1153,10 @@ int main()
     //test_sws();
     //test_swr();
     //test_desktop();
-    test_systemsound();
+    //test_systemsound();
     //test_output_h264();
     //test_output_aac();
-    //test_output_mp3();
+    test_output_mp3();
     //test_encode_h264();
     //test_encode_mp3();
     //test_screen_capture();
