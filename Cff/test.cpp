@@ -99,12 +99,13 @@ void DemuxDesktopCB(const AVPacket* packet, AVRational timebase, void* param)
     std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
         " timestamp : " << timestamp << std::endl;*/
+    //std::cout << packet->pts << "\t" << packet->dts << std::endl;
 
     CDecode* decode = static_cast<CDecode*>(param);
-    std::string err;
     if (decode != nullptr)
     {
-        TESTCHECKRET(decode->decode(packet));
+        auto ret = decode->decode(packet);
+        //TESTCHECKRET(ret);
     }
 }
 
@@ -116,17 +117,15 @@ void DemuxSystemSoundCB(const AVPacket* packet, AVRational timebase, void* param
         " timestamp : " << timestamp << std::endl;*/
 
     CDecode* decode = static_cast<CDecode*>(param);
-    std::string err;
     if (decode != nullptr)
     {
-        int ret = decode->decode(packet);
-        TESTCHECKRET(ret);
+        auto ret = decode->decode(packet);
+        //TESTCHECKRET(ret);
     }
 }
 
 void DecVideoFrameCB(const AVFrame* frame, void* param)
 {
-    std::string err;
     CEncode* enc = static_cast<CEncode*>(param);
     if (enc != nullptr)
     {
@@ -153,17 +152,25 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
             
             int lines = sws.scale(frame->data, frame->linesize, 0, frame->height, f.data, f.linesize);
             //std::cout << "sws " << lines << " lines." << std::endl;
-            static int64_t start = frame->pts;
-            f.pts = frame->pts - start;
-            f.pkt_dts = frame->pkt_dts - start;
-            f.pkt_duration = frame->pkt_duration;
-            f.best_effort_timestamp = frame->best_effort_timestamp - start;
-            TESTCHECKRET(enc->encode(&f));
+            static int64_t start = av_gettime();
+            static int64_t lastpts = -1;
+            f.pts = av_gettime() - start;
+            if (f.pts <= lastpts)
+            {
+                ++f.pts;
+            }
+            lastpts = f.pts;
+            f.pkt_dts = f.pts;
+            //TESTCHECKRET(enc->encode(&f)); //ERROR!
+            auto ret = enc->encode(&f);
+            //TESTCHECKRET(ret);
             return;
         }
         else
         {
-            //TESTCHECKRET(enc->encode(frame));
+            auto ret = enc->encode(frame);
+            //TESTCHECKRET(ret);
+            return;
         }
     }
 
@@ -197,7 +204,6 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
 void DecAudioFrameCB(const AVFrame * frame, void* param)
 {
     //std::cout << "got dec frame in DecAudioFrameCB..." << std::endl;
-    std::string err;
     CEncode* enc = static_cast<CEncode*>(param);
     if (enc != nullptr)
     {
@@ -258,7 +264,8 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
                 ff.pkt_duration = av_rescale_q(g_framesize, { 1, 44100 }, { 1, AV_TIME_BASE });
                 ff.pkt_pos = -1;
                 lastpts = pts;
-                TESTCHECKRET(enc->encode(&ff));
+                auto ret = enc->encode(&ff);
+                //TESTCHECKRET(ret);
             }
             return;
         }
@@ -292,7 +299,6 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
 
 void EncVideoFrameCB(const AVPacket * packet, void* param)
 {
-    std::string err;
     COutput* out = static_cast<COutput*>(param);
     if (out != nullptr)
     {
@@ -314,7 +320,6 @@ void EncVideoFrameCB(const AVPacket * packet, void* param)
 void EncAudioFrameCB(const AVPacket * packet, void* param)
 {
     //std::cout << "got enc frame in EncAudioFrameCB..." << std::endl;
-    std::string err;
     COutput* out = static_cast<COutput*>(param);
     if (out != nullptr)
     {
@@ -582,7 +587,7 @@ void test_desktop()
     TESTCHECKRET(ret);
 
     const AVCodecParameters* par = nullptr;
-    ret = demux.get_steam_par(g_vindex, par);
+    ret = demux.get_stream_par(g_vindex, par);
     TESTCHECKRET(ret);
     ret = decode.copy_param(par);
     TESTCHECKRET(ret);
@@ -629,7 +634,7 @@ void test_systemsound()
     ret = decode.set_dec_callback(DecAudioFrameCB, nullptr);
     TESTCHECKRET(ret);
     const AVCodecParameters* par = nullptr;
-    ret = demux.get_steam_par(g_aindex, par);
+    ret = demux.get_stream_par(g_aindex, par);
     TESTCHECKRET(ret);
     ret = decode.copy_param(par);
     TESTCHECKRET(ret);
@@ -667,7 +672,7 @@ void test_output_h264()
     TESTCHECKRET(ret);
 
     const AVCodecParameters* par = nullptr;
-    ret = demux.get_steam_par(g_vindex, par);
+    ret = demux.get_stream_par(g_vindex, par);
     TESTCHECKRET(ret);
 
     ret = output.set_output("out.h264");
@@ -712,7 +717,7 @@ void test_output_aac()
     TESTCHECKRET(ret);
 
     const AVCodecParameters* par = nullptr;
-    ret = demux.get_steam_par(g_aindex, par);
+    ret = demux.get_stream_par(g_aindex, par);
     TESTCHECKRET(ret);
 
     ret = output.set_output("out.aac");
@@ -757,7 +762,7 @@ void test_output_mp3()
     TESTCHECKRET(ret);
 
     const AVCodecParameters* par = nullptr;
-    ret = demux.get_steam_par(g_aindex, par);
+    ret = demux.get_stream_par(g_aindex, par);
     TESTCHECKRET(ret);
 
     ret = output.set_output("out.mp3");
@@ -872,8 +877,7 @@ void test_encode_mp3()
 // 录屏
 void test_screen_capture()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     CDemux demuxdesktop;
     CDecode decodedesktop;
     CEncode encodedesktop;
@@ -895,13 +899,13 @@ void test_screen_capture()
     ret = demuxdesktop.openinput();
     TESTCHECKRET(ret);
 
-    g_vindex = demuxdesktop.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
-    std::cout << err << std::endl;
+    ret = demuxdesktop.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
+    TESTCHECKRET(ret);
 
     ret = decodedesktop.set_dec_callback(DecVideoFrameCB, &encodedesktop);
     TESTCHECKRET(ret);
     const AVCodecParameters* par = nullptr;
-    demuxdesktop.get_steam_par(g_vindex, par);
+    demuxdesktop.get_stream_par(g_vindex, par);
     ret = decodedesktop.copy_param(par);
     TESTCHECKRET(ret);
     ret = decodedesktop.codec_open();
@@ -947,8 +951,7 @@ void test_screen_capture()
 // 录音
 void test_record()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     CDemux demuxsound;
     CDecode decodesound;
     CEncode encodesound;
@@ -970,13 +973,13 @@ void test_record()
     ret = demuxsound.openinput();
     TESTCHECKRET(ret);
 
-    g_aindex = demuxsound.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
-    std::cout << err << std::endl;
+    ret = demuxsound.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
+    TESTCHECKRET(ret);
 
     ret = decodesound.set_dec_callback(DecAudioFrameCB, &encodesound);
     TESTCHECKRET(ret);
     const AVCodecParameters* par = nullptr;
-    demuxsound.get_steam_par(g_aindex, par);
+    demuxsound.get_stream_par(g_aindex, par);
     ret = decodesound.copy_param(par);
     TESTCHECKRET(ret);
     ret = decodesound.codec_open();
@@ -1025,8 +1028,7 @@ void test_record()
 // 录屏录音
 void test_capture_record()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     CDemux demuxdesktop;
     CDecode decodedesktop;
     CEncode encodedesktop;
@@ -1051,13 +1053,14 @@ void test_capture_record()
     ret = demuxdesktop.openinput();
     TESTCHECKRET(ret);
 
-    g_vindex = demuxdesktop.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
-    std::cout << err << std::endl;
+    ret = demuxdesktop.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
+    TESTCHECKRET(ret);
 
     ret = decodedesktop.set_dec_callback(DecVideoFrameCB, &encodedesktop);
     TESTCHECKRET(ret);
     const AVCodecParameters* par = nullptr;
-    demuxdesktop.get_steam_par(g_vindex, par);
+    ret = demuxdesktop.get_stream_par(g_vindex, par);
+    TESTCHECKRET(ret);
     ret = decodedesktop.copy_param(par);
     TESTCHECKRET(ret);
     ret = decodedesktop.codec_open();
@@ -1079,12 +1082,13 @@ void test_capture_record()
     ret = demuxsound.openinput();
     TESTCHECKRET(ret);
 
-    g_aindex = demuxsound.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
-    std::cout << err << std::endl;
+    ret = demuxsound.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
+    TESTCHECKRET(ret);
 
     ret = decodesound.set_dec_callback(DecAudioFrameCB, &encodesound);
     TESTCHECKRET(ret);
-    demuxdesktop.get_steam_par(g_aindex, par);
+    ret = demuxsound.get_stream_par(g_aindex, par);
+    TESTCHECKRET(ret);
     ret = decodesound.copy_param(par);
     TESTCHECKRET(ret);
     ret = decodesound.codec_open();
@@ -1113,9 +1117,8 @@ void test_capture_record()
     TESTCHECKRET(ret);
     ret = output.add_stream(AV_CODEC_ID_H264, g_vindex_output);
     TESTCHECKRET(ret);
-
     const AVCodecContext* codectx = nullptr;
-    ret = encodesound.get_codectx(codectx);
+    ret = encodedesktop.get_codectx(codectx);
     TESTCHECKRET(ret);
     ret = output.copy_param(g_vindex_output, codectx);
     TESTCHECKRET(ret);
@@ -1165,9 +1168,9 @@ int main()
     //test_output_aac();
     //test_output_mp3();
     //test_encode_h264();
-    test_encode_mp3();
+    //test_encode_mp3();
     //test_screen_capture();
     //test_record();
-    //test_capture_record();
+    test_capture_record();
     return 0;
 }

@@ -52,7 +52,8 @@ int CSwr::lock_opt()
     {
         return AVERROR_BUG2;
     }
-    CHECKFFRET(swr_init(swrctx_));
+    int ret = swr_init(swrctx_);
+    CHECKFFRET(ret);
 
     status_ = LOCKED;
     return 0;

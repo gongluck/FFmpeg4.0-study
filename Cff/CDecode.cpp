@@ -41,9 +41,8 @@ int CDecode::set_hwdec_type(AVHWDeviceType hwtype, bool trans)
 int CDecode::set_codeid(AVCodecID id)
 {
     LOCK();
-    int ret = 0;
-
-    CHECKFFRET(clean_opt());
+    int ret = clean_opt();
+    CHECKFFRET(ret);
 
     do
     {
@@ -117,8 +116,10 @@ int CDecode::copy_param(const AVCodecParameters* par)
 {
     LOCK();
 
-    CHECKFFRET(set_codeid(par->codec_id));
-    CHECKFFRET(avcodec_parameters_to_context(codectx_, par));
+    int ret = set_codeid(par->codec_id);
+    CHECKFFRET(ret);
+    ret = avcodec_parameters_to_context(codectx_, par);
+    CHECKFFRET(ret);
 
     return 0;
 }
@@ -131,7 +132,8 @@ int CDecode::codec_open()
     {
         return EINVAL;
     }
-    CHECKFFRET(avcodec_open2(codectx_, codec_, nullptr));
+    int ret = avcodec_open2(codectx_, codec_, nullptr);
+    CHECKFFRET(ret);
 
     return 0;
 }

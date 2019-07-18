@@ -43,8 +43,8 @@ public:
     int get_timebase(int index, AVRational& timebase);
 
     // 设置编码器
-    int copy_param(int index, const AVCodecParameters* par);
-    int copy_param(int index, const AVCodecContext* codectx);
+    int copy_param(unsigned int index, const AVCodecParameters* par);
+    int copy_param(unsigned int index, const AVCodecContext* codectx);
 
     // 打开输出
     int open();

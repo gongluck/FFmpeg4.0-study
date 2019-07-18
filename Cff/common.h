@@ -49,7 +49,7 @@ if(this->status_ != STOP)\
 {\
     return EINVAL;\
 }
-#define CHECKNOTSTOP(err) \
+#define CHECKNOTSTOP() \
 if(this->status_ == STOP)\
 {\
     return EINVAL;\

@@ -63,7 +63,7 @@ public:
     // 获取流索引
     int get_steam_index(AVMediaType type, int& index);
     // 获取流参数
-    int get_steam_par(int index, const AVCodecParameters*& par);
+    int get_stream_par(int index, const AVCodecParameters*& par);
 
     // 跳转到指定秒
     int seek(int64_t timestamp, int index, int flags);

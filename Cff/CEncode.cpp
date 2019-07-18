@@ -32,7 +32,8 @@ int CEncode::set_encodeid(AVCodecID id)
 {
     LOCK();
 
-    CHECKFFRET(close());
+    int ret = close();
+    CHECKFFRET(ret);
 
     codec_ = avcodec_find_encoder(id);
     if (codec_ == nullptr)
@@ -86,7 +87,8 @@ int CEncode::set_audio_param(int64_t bitrate, int samplerate, uint64_t channella
     codectx_->sample_fmt = fmt;
     codectx_->codec_type = AVMEDIA_TYPE_AUDIO;
 
-    CHECKFFRET(avcodec_open2(codectx_, codec_, nullptr));
+    int ret = avcodec_open2(codectx_, codec_, nullptr);
+    CHECKFFRET(ret);
     framesize = codectx_->frame_size;
 
     return 0;

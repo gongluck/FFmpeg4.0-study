@@ -123,7 +123,6 @@ int CDemux::stopdemux()
 int CDemux::demuxthread()
 {
     int ret = 0;
-    std::string err;
 
     AVPacket* packet = av_packet_alloc();
     const AVBitStreamFilter* bsf = nullptr;
@@ -267,7 +266,7 @@ int CDemux::get_steam_index(AVMediaType type, int& index)
     }
 } 
 
-int CDemux::get_steam_par(int index, const AVCodecParameters*& par)
+int CDemux::get_stream_par(int index, const AVCodecParameters*& par)
 {
     TRYLOCK();
 

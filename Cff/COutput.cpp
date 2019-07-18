@@ -45,7 +45,8 @@ int COutput::add_stream(AVCodecID id, int& index)
     }
     if (fmt_ == nullptr)
     {
-        CHECKFFRET(avformat_alloc_output_context2(&fmt_, nullptr, nullptr, output_.c_str()));
+        int ret = avformat_alloc_output_context2(&fmt_, nullptr, nullptr, output_.c_str());
+        CHECKFFRET(ret);
     }
 
     AVCodec* codec = avcodec_find_encoder(id);
@@ -72,7 +73,7 @@ int COutput::get_timebase(int index, AVRational& timebase)
     return 0;
 }
 
-int COutput::copy_param(int index, const AVCodecParameters* par)
+int COutput::copy_param(unsigned int index, const AVCodecParameters* par)
 {
     LOCK();
     CHECKSTOP();
@@ -85,10 +86,10 @@ int COutput::copy_param(int index, const AVCodecParameters* par)
     return avcodec_parameters_copy(fmt_->streams[index]->codecpar, par);
 }    
 
-int COutput::copy_param(int index, const AVCodecContext* codectx)
+int COutput::copy_param(unsigned int index, const AVCodecContext* codectx)
 {
     LOCK();
-    CHECKSTOP(err);
+    CHECKSTOP();
     
     if (fmt_ == nullptr || fmt_->nb_streams <= index)
     {
@@ -108,11 +109,13 @@ int COutput::open()
         return EINVAL;
     }
 
-    CHECKFFRET(avio_open2(&fmt_->pb, output_.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr));
+    int ret = avio_open2(&fmt_->pb, output_.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr);
+    CHECKFFRET(ret);
 
     av_dump_format(fmt_, 0, output_.c_str(), 1);
 
-    CHECKFFRET(avformat_write_header(fmt_, nullptr));
+    ret = avformat_write_header(fmt_, nullptr);
+    CHECKFFRET(ret);
     status_ = OPENED;
 
     return 0;
@@ -135,8 +138,10 @@ int COutput::close()
     LOCK();
     CHECKNOTSTOP();
 
-    CHECKFFRET(av_write_trailer(fmt_));
-    CHECKFFRET(avio_closep(&fmt_->pb));
+    int ret = av_write_trailer(fmt_);
+    CHECKFFRET(ret);
+    ret = avio_closep(&fmt_->pb);
+    CHECKFFRET(ret);
     if (fmt_ != nullptr)
     {
         av_dump_format(fmt_, 0, output_.c_str(), 1);
