@@ -302,7 +302,7 @@ int CDemux::device_register_all()
 
     avdevice_register_all();
 
-    return true;
+    return 0;
 }
 
 int CDemux::set_input_format(const std::string& fmt)

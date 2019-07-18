@@ -34,7 +34,7 @@ int g_aindex_output = -1;
 int g_framesize = 1024;
 
 #define TESTCHECKRET(ret)\
-if(ret != 0)\
+if(ret < 0)\
 {\
     std::cerr << av_err2str(ret) << std::endl;\
 }
@@ -46,10 +46,10 @@ void DemuxStatusCB(CDemux::STATUS status, int err, void* param)
 
 void DemuxPacketCB(const AVPacket* packet, AVRational timebase, void* param)
 {
-    auto timestamp = av_rescale_q_rnd(packet->pts, timebase, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+    /*auto timestamp = av_rescale_q_rnd(packet->pts, timebase, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
     std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
-        " timestamp : " << timestamp << std::endl;
+        " timestamp : " << timestamp << std::endl;*/
 
 #ifdef SEEK
     CDemux* demux = static_cast<CDemux*>(param);
@@ -99,7 +99,8 @@ void DemuxPacketCB_save(const AVPacket* packet, AVRational timebase, void* param
 
 void DemuxDesktopCB(const AVPacket* packet, AVRational timebase, void* param)
 {
-    /*std::cout << std::this_thread::get_id() <<
+    /*auto timestamp = av_rescale_q_rnd(packet->pts, timebase, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+    std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
         " timestamp : " << timestamp << std::endl;*/
 
@@ -113,7 +114,8 @@ void DemuxDesktopCB(const AVPacket* packet, AVRational timebase, void* param)
 
 void DemuxSystemSoundCB(const AVPacket* packet, AVRational timebase, void* param)
 {
-    /*std::cout << std::this_thread::get_id() <<
+    /*auto timestamp = av_rescale_q_rnd(packet->pts, timebase, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+    std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
         " timestamp : " << timestamp << std::endl;*/
 
@@ -121,7 +123,8 @@ void DemuxSystemSoundCB(const AVPacket* packet, AVRational timebase, void* param
     std::string err;
     if (decode != nullptr)
     {
-        TESTCHECKRET(decode->decode(packet));
+        int ret = decode->decode(packet);
+        TESTCHECKRET(ret);
     }
 }
 
@@ -406,7 +409,7 @@ void test_decode_h264()
 // 解码aac
 void test_decode_aac()
 {
-    bool ret = false;
+    int ret = 0;
     std::ifstream aac("in.aac", std::ios::binary);
     char buf[1024] = { 0 };
     CDecode decode;
@@ -429,7 +432,7 @@ void test_decode_aac()
 // 解码mp3
 void test_decode_mp3()
 {
-    bool ret = false;
+    int ret = 0;
     std::ifstream mp3("in.mp3", std::ios::binary);
     char buf[1024] = { 0 };
     CDecode decode;
@@ -452,7 +455,7 @@ void test_decode_mp3()
 // 视频帧转换
 void test_sws()
 {
-    bool ret = false;
+    int ret = 0;
     std::ifstream yuv("in.yuv", std::ios::binary);
     CSws sws;
 
@@ -497,7 +500,7 @@ void test_sws()
 // 音频重采样
 void test_swr()
 {
-    bool ret = false;
+    int ret = 0;
     std::ifstream pcm("in.pcm", std::ios::binary);
     CSwr swr;
 
@@ -556,8 +559,7 @@ void test_swr()
 // 采集桌面
 void test_desktop()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     CDemux demux;
     CDecode decode;
 
@@ -577,14 +579,16 @@ void test_desktop()
     TESTCHECKRET(ret);
 
     ret = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
-    std::cout << err << std::endl;
+    std::cout << "g_vindex : " << g_vindex << std::endl;
     ret = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
-    std::cout << err << std::endl;
+    std::cout << "g_aindex : " << g_aindex << std::endl;
 
     ret = decode.set_dec_callback(DecVideoFrameCB, nullptr);
     TESTCHECKRET(ret);
+
     const AVCodecParameters* par = nullptr;
-    demux.get_steam_par(g_vindex, par);
+    ret = demux.get_steam_par(g_vindex, par);
+    TESTCHECKRET(ret);
     ret = decode.copy_param(par);
     TESTCHECKRET(ret);
     ret = decode.codec_open();
@@ -603,8 +607,7 @@ void test_desktop()
 // 采集系统声音
 void test_systemsound()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     CDemux demux;
     CDecode decode;
 
@@ -623,15 +626,16 @@ void test_systemsound()
     ret = demux.openinput();
     TESTCHECKRET(ret);
 
-    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
-    std::cout << err << std::endl;
-    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
-    std::cout << err << std::endl;
+    ret = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
+    std::cout << "g_vindex : " << g_vindex << std::endl;
+    ret = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
+    std::cout << "g_aindex : " << g_aindex << std::endl;
 
     ret = decode.set_dec_callback(DecAudioFrameCB, nullptr);
     TESTCHECKRET(ret);
     const AVCodecParameters* par = nullptr;
-    demux.get_steam_par(g_aindex, par);
+    ret = demux.get_steam_par(g_aindex, par);
+    TESTCHECKRET(ret);
     ret = decode.copy_param(par);
     TESTCHECKRET(ret);
     ret = decode.codec_open();
@@ -1152,9 +1156,9 @@ int main()
     //test_decode_aac();
     //test_decode_mp3();
     //test_sws();
-    test_swr();
+    //test_swr();
     //test_desktop();
-    //test_systemsound();
+    test_systemsound();
     //test_output_h264();
     //test_output_aac();
     //test_output_mp3();

@@ -117,10 +117,6 @@ int CDecode::copy_param(const AVCodecParameters* par)
 {
     LOCK();
 
-    if (codectx_ == nullptr || par == nullptr)
-    {
-        return EINVAL;
-    }
     CHECKFFRET(set_codeid(par->codec_id));
     CHECKFFRET(avcodec_parameters_to_context(codectx_, par));
 
