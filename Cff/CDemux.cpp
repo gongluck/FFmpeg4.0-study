@@ -162,7 +162,7 @@ bool CDemux::demuxthread()
                 err = av_err2str(ret);
                 break;
             }
-            for (int i = 0; i < fmtctx_->nb_streams; ++i)
+            for (unsigned int i = 0; i < fmtctx_->nb_streams; ++i)
             {
                 if (fmtctx_->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
                 {

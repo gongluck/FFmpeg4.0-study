@@ -149,9 +149,9 @@ bool CEncode::close(std::string& err)
     LOCK();
     err = "opt succeed.";
 
-    if (codectx_ != nullptr)
+    if (codectx_ != nullptr && !encode(nullptr, err))
     {
-        CHECKFFRET(encode(nullptr, err));
+        return false;
     }
     avcodec_free_context(&codectx_);
 
