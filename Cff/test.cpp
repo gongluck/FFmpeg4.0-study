@@ -158,12 +158,12 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
             f.pkt_dts = frame->pkt_dts - start;
             f.pkt_duration = frame->pkt_duration;
             f.best_effort_timestamp = frame->best_effort_timestamp - start;
-            TESTCHECKRET(enc->encode(&f, err));
+            TESTCHECKRET(enc->encode(&f));
             return;
         }
         else
         {
-            //TESTCHECKRET(enc->encode(frame, err));
+            //TESTCHECKRET(enc->encode(frame));
         }
     }
 
@@ -258,13 +258,13 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
                 ff.pkt_duration = av_rescale_q(g_framesize, { 1, 44100 }, { 1, AV_TIME_BASE });
                 ff.pkt_pos = -1;
                 lastpts = pts;
-                TESTCHECKRET(enc->encode(&ff, err));
+                TESTCHECKRET(enc->encode(&ff));
             }
             return;
         }
         else
         {
-            TESTCHECKRET(enc->encode(frame, err));
+            TESTCHECKRET(enc->encode(frame));
             return;
         }
     }
@@ -298,10 +298,7 @@ void EncVideoFrameCB(const AVPacket * packet, void* param)
     {
         AVRational timebase = { 0 };
         out->get_timebase(g_vindex_output, timebase);
-        //static int64_t start = av_gettime();
         const_cast<AVPacket*>(packet)->stream_index = g_vindex_output;
-        //const_cast<AVPacket*>(packet)->pts = av_rescale_q(av_gettime() - start, { 1, AV_TIME_BASE }, timebase);
-        //const_cast<AVPacket*>(packet)->dts = packet->pts;
         const_cast<AVPacket*>(packet)->pts = av_rescale_q(packet->pts, { 1, AV_TIME_BASE }, timebase);
         const_cast<AVPacket*>(packet)->dts = av_rescale_q(packet->dts, { 1, AV_TIME_BASE }, timebase);
         const_cast<AVPacket*>(packet)->duration = av_rescale_q(packet->duration, { 1, AV_TIME_BASE }, timebase);
@@ -389,8 +386,8 @@ void test_decode_h264()
 
     ret = decode.set_dec_callback(DecVideoFrameCB, nullptr);
     TESTCHECKRET(ret);
-    ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true);
-    TESTCHECKRET(ret);
+    //ret = decode.set_hwdec_type(AV_HWDEVICE_TYPE_DXVA2, true);
+    //TESTCHECKRET(ret);
     ret = decode.set_codeid(AV_CODEC_ID_H264);
     TESTCHECKRET(ret);
     ret = decode.codec_open();
@@ -787,18 +784,17 @@ void test_output_mp3()
 // 编码h264
 void test_encode_h264()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     // out.yuv这个文件太大了，没有上传github，可以用解码的例子生成
     std::ifstream yuv("out.yuv", std::ios::binary);
     char buf[414720] = { 0 };
     CEncode encode;
 
-    ret = encode.set_enc_callback(EncVideoFrameCB, nullptr, err);
+    ret = encode.set_enc_callback(EncVideoFrameCB, nullptr);
     TESTCHECKRET(ret);
-    ret = encode.set_encodeid(AV_CODEC_ID_H264, err);
+    ret = encode.set_encodeid(AV_CODEC_ID_H264);
     TESTCHECKRET(ret);
-    ret = encode.set_video_param(400000, 640, 432, { 1,25 }, { 25,1 }, 5, 0, AV_PIX_FMT_YUV420P, err);
+    ret = encode.set_video_param(400000, 640, 432, { 1,25 }, { 25,1 }, 5, 0, AV_PIX_FMT_YUV420P);
     TESTCHECKRET(ret);
 
     auto frame = av_frame_alloc();
@@ -818,32 +814,31 @@ void test_encode_h264()
         static int i = 0;
         frame->pts = i++;
 
-        ret = encode.encode(frame, err);
+        ret = encode.encode(frame);
         TESTCHECKRET(ret);
     }
 
     av_frame_free(&frame);
 
-    ret = encode.close(err);
+    ret = encode.close();
     TESTCHECKRET(ret);
 }
 
 // 编码mp3
 void test_encode_mp3()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     // out.pcm这个文件太大了，没有上传github，可以用解码的例子生成
     std::ifstream pcm("out.pcm", std::ios::binary);
     char buf[10240] = { 0 };
     CEncode encode;
     int framesize = 0;
 
-    ret = encode.set_enc_callback(EncAudioFrameCB, nullptr, err);
+    ret = encode.set_enc_callback(EncAudioFrameCB, nullptr);
     TESTCHECKRET(ret);
-    ret = encode.set_encodeid(AV_CODEC_ID_MP3, err);
+    ret = encode.set_encodeid(AV_CODEC_ID_MP3);
     TESTCHECKRET(ret);
-    ret = encode.set_audio_param(64000, 44100, AV_CH_LAYOUT_STEREO, 2, AV_SAMPLE_FMT_FLTP, framesize, err);
+    ret = encode.set_audio_param(64000, 44100, AV_CH_LAYOUT_STEREO, 2, AV_SAMPLE_FMT_FLTP, framesize);
     TESTCHECKRET(ret);
 
     auto frame = av_frame_alloc();
@@ -864,13 +859,13 @@ void test_encode_mp3()
             memcpy(frame->data[1] + size * i, buf + size * (2 * i + 1), size);
         }
 
-        ret = encode.encode(frame, err);
+        ret = encode.encode(frame);
         TESTCHECKRET(ret);
     }
 
     av_frame_free(&frame);
 
-    ret = encode.close(err);
+    ret = encode.close();
     TESTCHECKRET(ret);
 }
 
@@ -913,11 +908,11 @@ void test_screen_capture()
     TESTCHECKRET(ret);
 
     // 编码h264
-    ret = encodedesktop.set_enc_callback(EncVideoFrameCB, &output, err);
+    ret = encodedesktop.set_enc_callback(EncVideoFrameCB, &output);
     TESTCHECKRET(ret);
-    ret = encodedesktop.set_encodeid(AV_CODEC_ID_H264, err);
+    ret = encodedesktop.set_encodeid(AV_CODEC_ID_H264);
     TESTCHECKRET(ret);
-    ret = encodedesktop.set_video_param(8500000, 1920, 1080, { 1,30 }, { 30,1 }, 120, 60, AV_PIX_FMT_YUV420P, err);
+    ret = encodedesktop.set_video_param(8500000, 1920, 1080, { 1,30 }, { 30,1 }, 120, 60, AV_PIX_FMT_YUV420P);
     TESTCHECKRET(ret);
 
     // 输出
@@ -925,7 +920,10 @@ void test_screen_capture()
     TESTCHECKRET(ret);
     ret = output.add_stream(AV_CODEC_ID_H264, g_vindex_output);
     TESTCHECKRET(ret);
-    ret = output.copy_param(g_vindex_output, encodedesktop.get_codectx(err));
+    const AVCodecContext* codectx = nullptr;
+    ret = encodedesktop.get_codectx(codectx);
+    TESTCHECKRET(ret);
+    ret = output.copy_param(g_vindex_output, codectx);
     TESTCHECKRET(ret);
 
     // 开始
@@ -940,7 +938,7 @@ void test_screen_capture()
     // 结束
     ret = demuxdesktop.stopdemux();
     TESTCHECKRET(ret);
-    ret = encodedesktop.close(err);
+    ret = encodedesktop.close();
     TESTCHECKRET(ret);
     ret = output.close();
     TESTCHECKRET(ret);
@@ -985,11 +983,11 @@ void test_record()
     TESTCHECKRET(ret);
 
     // 编码
-    ret = encodesound.set_enc_callback(EncAudioFrameCB, &output, err);
+    ret = encodesound.set_enc_callback(EncAudioFrameCB, &output);
     TESTCHECKRET(ret);
-    ret = encodesound.set_encodeid(AV_CODEC_ID_AAC, err);
+    ret = encodesound.set_encodeid(AV_CODEC_ID_AAC);
     TESTCHECKRET(ret);
-    ret = encodesound.set_audio_param(128000, 44100, AV_CH_LAYOUT_STEREO, 2, AV_SAMPLE_FMT_FLTP, g_framesize, err);
+    ret = encodesound.set_audio_param(128000, 44100, AV_CH_LAYOUT_STEREO, 2, AV_SAMPLE_FMT_FLTP, g_framesize);
     TESTCHECKRET(ret);
     std::cout << "framesize : " << g_framesize << std::endl;
     std::cout << "one framesize : " << av_samples_get_buffer_size(nullptr, 2, g_framesize, AV_SAMPLE_FMT_FLTP, 1) << std::endl;
@@ -1000,7 +998,10 @@ void test_record()
     TESTCHECKRET(ret);
     ret = output.add_stream(AV_CODEC_ID_AAC, g_aindex_output);
     TESTCHECKRET(ret);
-    ret = output.copy_param(g_aindex_output, encodesound.get_codectx(err));
+    const AVCodecContext* codectx = nullptr;
+    ret = encodesound.get_codectx(codectx);
+    TESTCHECKRET(ret);
+    ret = output.copy_param(g_aindex_output, codectx);
     TESTCHECKRET(ret);
 
     // 开始
@@ -1015,7 +1016,7 @@ void test_record()
     // 结束
     ret = demuxsound.stopdemux();
     TESTCHECKRET(ret);
-    ret = encodesound.close(err);
+    ret = encodesound.close();
     TESTCHECKRET(ret);
     ret = output.close();
     TESTCHECKRET(ret);
@@ -1090,19 +1091,19 @@ void test_capture_record()
     TESTCHECKRET(ret);
 
     // 编码h264
-    ret = encodedesktop.set_enc_callback(EncVideoFrameCB, &output, err);
+    ret = encodedesktop.set_enc_callback(EncVideoFrameCB, &output);
     TESTCHECKRET(ret);
-    ret = encodedesktop.set_encodeid(AV_CODEC_ID_H264, err);
+    ret = encodedesktop.set_encodeid(AV_CODEC_ID_H264);
     TESTCHECKRET(ret);
-    ret = encodedesktop.set_video_param(8500000, 1920, 1080, { 1,30 }, { 30,1 }, 150, 300, AV_PIX_FMT_YUV420P, err);
+    ret = encodedesktop.set_video_param(8500000, 1920, 1080, { 1,30 }, { 30,1 }, 150, 300, AV_PIX_FMT_YUV420P);
     TESTCHECKRET(ret);
 
     // 编码
-    ret = encodesound.set_enc_callback(EncAudioFrameCB, &output, err);
+    ret = encodesound.set_enc_callback(EncAudioFrameCB, &output);
     TESTCHECKRET(ret);
-    ret = encodesound.set_encodeid(AV_CODEC_ID_AAC, err);
+    ret = encodesound.set_encodeid(AV_CODEC_ID_AAC);
     TESTCHECKRET(ret);
-    ret = encodesound.set_audio_param(128000, 44100, AV_CH_LAYOUT_STEREO, 2, AV_SAMPLE_FMT_FLTP, g_framesize, err);
+    ret = encodesound.set_audio_param(128000, 44100, AV_CH_LAYOUT_STEREO, 2, AV_SAMPLE_FMT_FLTP, g_framesize);
     TESTCHECKRET(ret);
     std::cout << "framesize : " << g_framesize << std::endl;
     std::cout << "one framesize : " << av_samples_get_buffer_size(nullptr, 2, g_framesize, AV_SAMPLE_FMT_FLTP, 1) << std::endl;
@@ -1112,11 +1113,17 @@ void test_capture_record()
     TESTCHECKRET(ret);
     ret = output.add_stream(AV_CODEC_ID_H264, g_vindex_output);
     TESTCHECKRET(ret);
-    ret = output.copy_param(g_vindex_output, encodedesktop.get_codectx(err));
+
+    const AVCodecContext* codectx = nullptr;
+    ret = encodesound.get_codectx(codectx);
+    TESTCHECKRET(ret);
+    ret = output.copy_param(g_vindex_output, codectx);
     TESTCHECKRET(ret);
     ret = output.add_stream(AV_CODEC_ID_AAC, g_aindex_output);
     TESTCHECKRET(ret);
-    ret = output.copy_param(g_aindex_output, encodesound.get_codectx(err));
+    ret = encodesound.get_codectx(codectx);
+    TESTCHECKRET(ret);
+    ret = output.copy_param(g_aindex_output, codectx);
     TESTCHECKRET(ret);
 
     // 开始
@@ -1135,9 +1142,9 @@ void test_capture_record()
     TESTCHECKRET(ret);
     ret = demuxsound.stopdemux();
     TESTCHECKRET(ret);
-    ret = encodedesktop.close(err);
+    ret = encodedesktop.close();
     TESTCHECKRET(ret);
-    ret = encodesound.close(err);
+    ret = encodesound.close();
     TESTCHECKRET(ret);
     ret = output.close();
     TESTCHECKRET(ret);
@@ -1156,9 +1163,9 @@ int main()
     //test_systemsound();
     //test_output_h264();
     //test_output_aac();
-    test_output_mp3();
+    //test_output_mp3();
     //test_encode_h264();
-    //test_encode_mp3();
+    test_encode_mp3();
     //test_screen_capture();
     //test_record();
     //test_capture_record();

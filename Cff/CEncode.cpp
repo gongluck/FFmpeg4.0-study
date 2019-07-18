@@ -15,57 +15,46 @@
 
 CEncode::~CEncode()
 {
-    std::string err;
-    close(err);
+    close();
 }
 
-bool CEncode::set_enc_callback(EncFrameCallback cb, void* param, std::string& err)
+int CEncode::set_enc_callback(EncFrameCallback cb, void* param)
 {
     LOCK();
-    err = "opt succeed.";
 
     encframecb_ = cb;
     encframecbparam_ = param;
 
-    return true;
+    return 0;
 }
 
-bool CEncode::set_encodeid(AVCodecID id, std::string& err)
+int CEncode::set_encodeid(AVCodecID id)
 {
     LOCK();
-    err = "opt succeed.";
 
-    if (!close(err))
-    {
-        return false;
-    }
+    CHECKFFRET(close());
 
     codec_ = avcodec_find_encoder(id);
     if (codec_ == nullptr)
     {
-        err = "avcodec_find_encoder return nullptr";
-        return false;
+        return EINVAL;
     }
     codectx_ = avcodec_alloc_context3(codec_);
     if (codectx_ == nullptr)
     {
-        err = "avcodec_alloc_context3 return nullptr";
-        return false;
+        return AVERROR_BUG;
     }
 
-    return true;
+    return 0;
 }
 
-bool CEncode::set_video_param(int64_t bitrate, int width, int height, AVRational timebase, AVRational framerate, int gop, int maxbframes, AVPixelFormat fmt, std::string& err)
+int CEncode::set_video_param(int64_t bitrate, int width, int height, AVRational timebase, AVRational framerate, int gop, int maxbframes, AVPixelFormat fmt)
 {
     LOCK();
-    err = "opt succeed.";
-    int ret;
 
-    if (codectx_ == nullptr)
+    if (codectx_ == nullptr || codec_ == nullptr)
     {
-        err = "codectx_ is nullptr.";
-        return false;
+        return EINVAL;
     }
 
     codectx_->bit_rate = bitrate;
@@ -78,22 +67,16 @@ bool CEncode::set_video_param(int64_t bitrate, int width, int height, AVRational
     codectx_->pix_fmt = fmt;
     codectx_->codec_type = AVMEDIA_TYPE_VIDEO;
 
-    ret = avcodec_open2(codectx_, codec_, nullptr);
-    CHECKFFRET(ret);
-
-    return true;
+    return avcodec_open2(codectx_, codec_, nullptr);
 }   
 
-bool CEncode::set_audio_param(int64_t bitrate, int samplerate, uint64_t channellayout, int channels, AVSampleFormat fmt, int& framesize, std::string& err)
+int CEncode::set_audio_param(int64_t bitrate, int samplerate, uint64_t channellayout, int channels, AVSampleFormat fmt, int& framesize)
 {
     LOCK();
-    err = "opt succeed.";
-    int ret;
 
-    if (codectx_ == nullptr)
+    if (codectx_ == nullptr || codec_ == nullptr)
     {
-        err = "codectx_ is nullptr.";
-        return false;
+        return EINVAL;
     }
 
     codectx_->bit_rate = bitrate;
@@ -103,24 +86,27 @@ bool CEncode::set_audio_param(int64_t bitrate, int samplerate, uint64_t channell
     codectx_->sample_fmt = fmt;
     codectx_->codec_type = AVMEDIA_TYPE_AUDIO;
 
-    ret = avcodec_open2(codectx_, codec_, nullptr);
-    CHECKFFRET(ret);
-
+    CHECKFFRET(avcodec_open2(codectx_, codec_, nullptr));
     framesize = codectx_->frame_size;
 
-    return true;
+    return 0;
 }
 
-const AVCodecContext* CEncode::get_codectx(std::string& err)
+int CEncode::get_codectx(const AVCodecContext*& codectx)
 {
-    return codectx_;
+    codectx = codectx_;
+    return 0;
 }
 
-bool CEncode::encode(const AVFrame* frame, std::string& err)
+int CEncode::encode(const AVFrame* frame)
 {
     LOCK();
-    err = "opt succeed.";
-    int ret;
+    int ret = 0;
+
+    if (codectx_ == nullptr)
+    {
+        return EINVAL;
+    }
 
     ret = avcodec_send_frame(codectx_, frame);
     CHECKFFRET(ret);
@@ -128,10 +114,6 @@ bool CEncode::encode(const AVFrame* frame, std::string& err)
     while (ret >= 0) 
     {
         ret = avcodec_receive_packet(codectx_, &pkt_);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-        {
-            return true;
-        } 
         CHECKFFRET(ret);
 
         if (encframecb_ != nullptr)
@@ -141,17 +123,16 @@ bool CEncode::encode(const AVFrame* frame, std::string& err)
         av_packet_unref(&pkt_);
     }
 
-    return true;
+    return ret;
 }
 
-bool CEncode::close(std::string& err)
+int CEncode::close()
 {
     LOCK();
-    err = "opt succeed.";
 
-    if (codectx_ != nullptr && !encode(nullptr, err))
+    if (codectx_ != nullptr)
     {
-        return false;
+        encode(nullptr);
     }
     avcodec_free_context(&codectx_);
 

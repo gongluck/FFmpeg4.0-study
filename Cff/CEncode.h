@@ -24,8 +24,8 @@ extern "C"
 }
 #endif
 
-#include <string>
 #include <mutex>
+#include <functional>
 
 class CEncode
 {
@@ -35,29 +35,29 @@ public:
     typedef void (*EncFrameCallback)(const AVPacket* packet, void* param);
 
     // 设置编码帧回调 
-    bool set_enc_callback(EncFrameCallback cb, void* param, std::string& err);
+    int set_enc_callback(EncFrameCallback cb, void* param);
 
     // 设置编码器
-    bool set_encodeid(AVCodecID id, std::string& err);
+    int set_encodeid(AVCodecID id);
 
     // 设置视频参数
-    bool set_video_param(int64_t bitrate, int width, int height, AVRational timebase, AVRational framerate, int gop, int maxbframes, AVPixelFormat fmt, std::string& err);
+    int set_video_param(int64_t bitrate, int width, int height, AVRational timebase, AVRational framerate, int gop, int maxbframes, AVPixelFormat fmt);
     // 设置音频参数
-    bool set_audio_param(int64_t bitrate, int samplerate, uint64_t channellayout, int channels, AVSampleFormat fmt, int& framesize, std::string& err);
+    int set_audio_param(int64_t bitrate, int samplerate, uint64_t channellayout, int channels, AVSampleFormat fmt, int& framesize);
 
     // 获取编码上下文
-    const AVCodecContext* get_codectx(std::string& err);
+    int get_codectx(const AVCodecContext*& codectx);
     
     // 编码
-    bool encode(const AVFrame* frame, std::string& err);
+    int encode(const AVFrame* frame);
 
     // 关闭
-    bool close(std::string& err);
+    int close();
 
 private:
     std::recursive_mutex mutex_;
 
-    EncFrameCallback encframecb_ = nullptr;
+    std::function<void(const AVPacket*, void*)> encframecb_ = nullptr;
     void* encframecbparam_ = nullptr;
 
     //ffmpeg
