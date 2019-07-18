@@ -221,9 +221,9 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
                 ff.channel_layout = AV_CH_LAYOUT_STEREO;
                 av_frame_get_buffer(&ff, 1);
 
-                TESTCHECKRET(swr.set_src_opt(AV_CH_LAYOUT_STEREO, frame->sample_rate, static_cast<AVSampleFormat>(frame->format), err));
-                TESTCHECKRET(swr.set_dst_opt(AV_CH_LAYOUT_STEREO, fltp_frame.sample_rate, static_cast<AVSampleFormat>(fltp_frame.format), err));
-                TESTCHECKRET(swr.lock_opt(err));
+                TESTCHECKRET(swr.set_src_opt(AV_CH_LAYOUT_STEREO, frame->sample_rate, static_cast<AVSampleFormat>(frame->format)));
+                TESTCHECKRET(swr.set_dst_opt(AV_CH_LAYOUT_STEREO, fltp_frame.sample_rate, static_cast<AVSampleFormat>(fltp_frame.format)));
+                TESTCHECKRET(swr.lock_opt());
 
                 binit = true;
             }
@@ -231,7 +231,7 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
             fltp_frame.nb_samples = 44100;
             av_frame_make_writable(&fltp_frame);
             
-            int samples = swr.convert(reinterpret_cast<uint8_t**>(&fltp_frame.data), fltp_frame.nb_samples, (const uint8_t**)(frame->data), frame->nb_samples, err);
+            int samples = swr.convert(reinterpret_cast<uint8_t**>(&fltp_frame.data), fltp_frame.nb_samples, (const uint8_t**)(frame->data), frame->nb_samples);
             //std::cout << "convert samples : " << samples << std::endl;
             if (samples <= 0)
             {
@@ -407,7 +407,6 @@ void test_decode_h264()
 void test_decode_aac()
 {
     bool ret = false;
-    std::string err;
     std::ifstream aac("in.aac", std::ios::binary);
     char buf[1024] = { 0 };
     CDecode decode;
@@ -431,7 +430,6 @@ void test_decode_aac()
 void test_decode_mp3()
 {
     bool ret = false;
-    std::string err;
     std::ifstream mp3("in.mp3", std::ios::binary);
     char buf[1024] = { 0 };
     CDecode decode;
@@ -455,7 +453,6 @@ void test_decode_mp3()
 void test_sws()
 {
     bool ret = false;
-    std::string err;
     std::ifstream yuv("in.yuv", std::ios::binary);
     CSws sws;
 
@@ -501,7 +498,6 @@ void test_sws()
 void test_swr()
 {
     bool ret = false;
-    std::string err;
     std::ifstream pcm("in.pcm", std::ios::binary);
     CSwr swr;
 
@@ -519,18 +515,18 @@ void test_swr()
     // 获取布局对应的通道数
     int channel = av_get_channel_layout_nb_channels(AV_CH_LAYOUT_STEREO);
 
-    ret = swr.set_src_opt(AV_CH_LAYOUT_STEREO, 44100, AV_SAMPLE_FMT_S16, err);
+    ret = swr.set_src_opt(AV_CH_LAYOUT_STEREO, 44100, AV_SAMPLE_FMT_S16);
     TESTCHECKRET(ret);
-    ret = swr.set_dst_opt(AV_CH_LAYOUT_STEREO, 48000, AV_SAMPLE_FMT_S16P, err);
+    ret = swr.set_dst_opt(AV_CH_LAYOUT_STEREO, 48000, AV_SAMPLE_FMT_S16P);
     TESTCHECKRET(ret);
-    ret = swr.lock_opt(err);
+    ret = swr.lock_opt();
     TESTCHECKRET(ret);
 
     std::ofstream outpcm("out.pcm", std::ios::binary);
     while (!pcm.eof())
     {
         pcm.read(reinterpret_cast<char*>(src[0]), srcsize);
-        int size = swr.convert(dst, dstlinesize, (const uint8_t * *)(src), 44100, err);
+        int size = swr.convert(dst, dstlinesize, (const uint8_t * *)(src), 44100);
         // 拷贝音频数据
         for (int i = 0; i < size; ++i) // 每个样本
         {
@@ -541,7 +537,7 @@ void test_swr()
         }
     }
 
-    ret = swr.unlock_opt(err);
+    ret = swr.unlock_opt();
     TESTCHECKRET(ret);
 
     // 清理
@@ -1155,8 +1151,8 @@ int main()
     //test_decode_h264();
     //test_decode_aac();
     //test_decode_mp3();
-    test_sws();
-    //test_swr();
+    //test_sws();
+    test_swr();
     //test_desktop();
     //test_systemsound();
     //test_output_h264();

@@ -35,15 +35,15 @@ public:
     // 状态
     enum STATUS { STOP, LOCKED };
     // 设置源参数
-    bool set_src_opt(int64_t layout, int rate, enum AVSampleFormat fmt, std::string& err);
+    int set_src_opt(int64_t layout, int rate, enum AVSampleFormat fmt);
     // 设置目标参数
-    bool set_dst_opt(int64_t layout, int rate, enum AVSampleFormat fmt, std::string& err);
+    int set_dst_opt(int64_t layout, int rate, enum AVSampleFormat fmt);
     // 锁定设置
-    bool lock_opt(std::string& err);
+    int lock_opt();
     // 解除锁定
-    bool unlock_opt(std::string& err);
+    int unlock_opt();
     // 转换(out_count,in_count is per channel's samples)
-    int convert(uint8_t** out, int out_count, const uint8_t** in, int in_count, std::string& err);
+    int convert(uint8_t** out, int out_count, const uint8_t** in, int in_count);
 
 private:
     STATUS status_ = STOP;

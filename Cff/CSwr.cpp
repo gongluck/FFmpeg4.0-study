@@ -15,60 +15,52 @@
 
 CSwr::~CSwr()
 {
-    std::string err;
-    unlock_opt(err);
+    unlock_opt();
 }
 
-bool CSwr::set_src_opt(int64_t layout, int rate, enum AVSampleFormat fmt, std::string& err)
+int CSwr::set_src_opt(int64_t layout, int rate, enum AVSampleFormat fmt)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     src_layout_ = layout;
     src_rate_ = rate;
     src_sam_fmt_ = fmt;
 
-    return true;
+    return 0;
 }
 
-bool CSwr::set_dst_opt(int64_t layout, int rate, enum AVSampleFormat fmt, std::string& err)
+int CSwr::set_dst_opt(int64_t layout, int rate, enum AVSampleFormat fmt)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     dst_layout_ = layout;
     dst_rate_ = rate;
     dst_sam_fmt_ = fmt;
 
-    return true;
+    return 0;
 }
 
-bool CSwr::lock_opt(std::string& err)
+int CSwr::lock_opt()
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     swrctx_ = swr_alloc_set_opts(swrctx_, dst_layout_, dst_sam_fmt_, dst_rate_, src_layout_, src_sam_fmt_, src_rate_, 0, nullptr);
     if (swrctx_ == nullptr)
     {
-        err = "swr_alloc_set_opts return nullptr.";
-        return false;
+        return AVERROR_BUG2;
     }
+    CHECKFFRET(swr_init(swrctx_));
 
-    int ret = swr_init(swrctx_);
-    CHECKFFRET(ret);
     status_ = LOCKED;
-
-    return true;
+    return 0;
 }
 
-bool CSwr::unlock_opt(std::string& err)
+int CSwr::unlock_opt()
 {
     LOCK();
-    err = "opt succeed.";
 
     swr_free(&swrctx_);
     status_ = STOP;
@@ -79,17 +71,13 @@ bool CSwr::unlock_opt(std::string& err)
     src_rate_ = 0;
     dst_rate_ = 0;
 
-    return true;
+    return 0;
 }
 
-int CSwr::convert(uint8_t** out, int out_count, const uint8_t** in, int in_count, std::string& err)
+int CSwr::convert(uint8_t** out, int out_count, const uint8_t** in, int in_count)
 {
     LOCK();
-    CHECKNOTSTOP(err);
-    err = "opt succeed.";
+    CHECKNOTSTOP();
 
-    int ret = swr_convert(swrctx_, out, out_count, in, in_count);
-    CHECKFFRET(ret);
-
-    return ret;
+    return swr_convert(swrctx_, out, out_count, in, in_count);
 }
