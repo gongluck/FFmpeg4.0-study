@@ -36,15 +36,15 @@ public:
     // 状态
     enum STATUS { STOP, LOCKED };
     // 设置源参数
-    bool set_src_opt(AVPixelFormat pixfmt, int w, int h, std::string& err);
+    int set_src_opt(AVPixelFormat pixfmt, int w, int h);
     // 设置目标参数
-    bool set_dst_opt(AVPixelFormat pixfmt, int w, int h, std::string& err);
+    int set_dst_opt(AVPixelFormat pixfmt, int w, int h);
     // 锁定设置
-    bool lock_opt(std::string& err);
+    int lock_opt();
     // 解除锁定
-    bool unlock_opt(std::string& err);
+    int unlock_opt();
     // 转换
-    int scale(const uint8_t* const srcSlice[], const int srcStride[], int srcSliceY, int srcSliceH, uint8_t* const dst[], const int dstStride[], std::string& err);
+    int scale(const uint8_t* const srcSlice[], const int srcStride[], int srcSliceY, int srcSliceH, uint8_t* const dst[], const int dstStride[]);
 
 private:
     STATUS status_ = STOP;

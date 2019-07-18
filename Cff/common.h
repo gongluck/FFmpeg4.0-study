@@ -52,8 +52,7 @@ if(this->status_ != STOP)\
 #define CHECKNOTSTOP(err) \
 if(this->status_ == STOP)\
 {\
-    err = "status is stop.";\
-    return false;\
+    return EINVAL;\
 }
 
 // 检查ffmpeg返回值

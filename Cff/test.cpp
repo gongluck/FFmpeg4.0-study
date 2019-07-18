@@ -143,16 +143,16 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
                 f.format = AV_PIX_FMT_YUV420P;
                 av_frame_get_buffer(&f, 1);
 
-                TESTCHECKRET(sws.set_src_opt(static_cast<AVPixelFormat>(frame->format), frame->width, frame->height, err));
-                TESTCHECKRET(sws.set_dst_opt(AV_PIX_FMT_YUV420P, 1920, 1080, err));
-                TESTCHECKRET(sws.lock_opt(err));
+                TESTCHECKRET(sws.set_src_opt(static_cast<AVPixelFormat>(frame->format), frame->width, frame->height));
+                TESTCHECKRET(sws.set_dst_opt(AV_PIX_FMT_YUV420P, 1920, 1080));
+                TESTCHECKRET(sws.lock_opt());
 
                 binit = true;
             }
             
             av_frame_make_writable(&f);
             
-            int lines = sws.scale(frame->data, frame->linesize, 0, frame->height, f.data, f.linesize, err);
+            int lines = sws.scale(frame->data, frame->linesize, 0, frame->height, f.data, f.linesize);
             //std::cout << "sws " << lines << " lines." << std::endl;
             static int64_t start = frame->pts;
             f.pts = frame->pts - start;
@@ -471,17 +471,17 @@ void test_sws()
     yuv.read(reinterpret_cast<char*>(src[1]), 640 * 432 / 4);
     yuv.read(reinterpret_cast<char*>(src[2]), 640 * 432 / 4);
 
-    ret = sws.set_src_opt(AV_PIX_FMT_YUV420P, 640, 432, err);
+    ret = sws.set_src_opt(AV_PIX_FMT_YUV420P, 640, 432);
     TESTCHECKRET(ret);
-    ret = sws.set_dst_opt(AV_PIX_FMT_BGR24, 320, 240, err);
+    ret = sws.set_dst_opt(AV_PIX_FMT_BGR24, 320, 240);
     TESTCHECKRET(ret);
-    ret = sws.lock_opt(err);
+    ret = sws.lock_opt();
     TESTCHECKRET(ret);
-    int size = sws.scale(src, srclinesize, 0, 432, dst, dstlinesize, err);
+    int size = sws.scale(src, srclinesize, 0, 432, dst, dstlinesize);
     std::cout << "sws " << size << " line" << std::endl;
     std::ofstream bgr("out.bgr", std::ios::binary);
     bgr.write(reinterpret_cast<char*>(dst[0]), dstsize);
-    ret = sws.unlock_opt(err);
+    ret = sws.unlock_opt();
     TESTCHECKRET(ret);
 
     // 清理
@@ -1154,8 +1154,8 @@ int main()
     //test_demux();
     //test_decode_h264();
     //test_decode_aac();
-    test_decode_mp3();
-    //test_sws();
+    //test_decode_mp3();
+    test_sws();
     //test_swr();
     //test_desktop();
     //test_systemsound();
