@@ -15,73 +15,73 @@
 
 CDemux::~CDemux()
 {
-    std::string err;
-    stopdemux(err);
-    free_opt(err);
+    stopdemux();
+    free_opt();
 }
 
-bool CDemux::set_input(const std::string& input, std::string& err)
+int CDemux::set_input(const std::string& input)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     if (input.empty())
     {
-        err = "input is empty.";
-        return false;
+        return EINVAL;
     }
     else
     {
-        input_ = input;
-        return true;
+        input_.assign(input);
+        return 0;
     }
 }
 
-const std::string& CDemux::get_input(std::string& err)
+int CDemux::get_input(std::string& input)
 {
     LOCK();
-    err = "opt succeed.";
-    return input_;
+    if (input_.empty())
+    {
+        return EINVAL;
+    }
+    else
+    {
+        input.assign(input_);
+        return 0;
+    }
 }
 
-bool CDemux::set_demux_callback(DemuxPacketCallback cb, void* param, std::string& err)
+int CDemux::set_demux_callback(DemuxPacketCallback cb, void* param)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     demuxpacketcb_ = cb;
     demuxpacketcbparam_ = param;
 
-    return true;
+    return 0;
 }
 
-bool CDemux::set_demux_status_callback(DemuxStatusCallback cb, void* param, std::string& err)
+int CDemux::set_demux_status_callback(DemuxStatusCallback cb, void* param)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     demuxstatuscb_ = cb;
     demuxstatuscbparam_ = param;
 
-    return true;
+    return 0;
 }
 
-bool CDemux::openinput(std::string& err)
+int CDemux::openinput()
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
     int ret = 0;
 
     avformat_close_input(&fmtctx_);
     fmtctx_ = avformat_alloc_context();
     if (fmtctx_ == nullptr)
     {
-        err = "avformat_alloc_context() return nullptr.";
-        return false;
+        return AVERROR_BUG;
     }
     ret = avformat_open_input(&fmtctx_, input_.c_str(), fmt_, &dic_);
     CHECKFFRET(ret);
@@ -91,26 +91,24 @@ bool CDemux::openinput(std::string& err)
 
     av_dump_format(fmtctx_, 0, input_.c_str(), 0);
 
-    return true;
+    return 0;
 }
 
-bool CDemux::begindemux(std::string& err)
+int CDemux::begindemux()
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     status_ = DEMUXING;
     std::thread th(&CDemux::demuxthread, this);
     demuxth_.swap(th);
 
-    return true;
+    return 0;
 }
 
-bool CDemux::stopdemux(std::string& err)
+int CDemux::stopdemux()
 {
     LOCK();
-    err = "opt succeed.";
 
     status_ = STOP;
     if (demuxth_.joinable())
@@ -119,74 +117,54 @@ bool CDemux::stopdemux(std::string& err)
     }
     avformat_close_input(&fmtctx_);
 
-    return true;
+    return 0;
 }
 
-bool CDemux::demuxthread()
+int CDemux::demuxthread()
 {
-    int ret;
+    int ret = 0;
     std::string err;
 
     AVPacket* packet = av_packet_alloc();
     const AVBitStreamFilter* bsf = nullptr;
     AVBSFContext* bsfctx = nullptr;
     AVCodecParameters* codecpar = nullptr;
-    int vindex = -1;
+    std::map<unsigned int, AVBSFContext*> bsfctxs;
     do
     {
         if (fmtctx_ == nullptr)
         {
-            err = "fmtctx is nullptr.";
+            ret = EINVAL;
             break;
         }
         else if (packet == nullptr)
         {
-            err = "av_packet_alloc() return nullptr.";
+            ret = AVERROR_BUG;
             break;
         }
         // 初始化packet
         av_init_packet(packet);
 
-        // bsf
-        if (!bsfname_.empty())
+        // BitStreamFilter
+        if (bsfs_.size() > 0)
         {
-            bsf = av_bsf_get_by_name(bsfname_.c_str());
-            if (bsf == nullptr)
+            for (const auto i : bsfs_)
             {
-                err = "av_bsf_get_by_name() return nullptr.";
-                break;
-            }
-            ret = av_bsf_alloc(bsf, &bsfctx);
-            if (ret < 0)
-            {
-                err = av_err2str(ret);
-                break;
-            }
-            for (unsigned int i = 0; i < fmtctx_->nb_streams; ++i)
-            {
-                if (fmtctx_->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+                if (i.first >= fmtctx_->nb_streams ||
+                    i.second.empty() ||
+                    (bsf = av_bsf_get_by_name(i.second.c_str())) == nullptr ||
+                    (codecpar = fmtctx_->streams[i.first]->codecpar) == nullptr ||
+                    av_bsf_alloc(bsf, &bsfctx) < 0)
                 {
-                    codecpar = fmtctx_->streams[i]->codecpar;
-                    vindex = i;
-                    break;
+                    continue;
                 }
-            }
-            if (codecpar == nullptr)
-            {
-                err = "can not find codecpar.";
-                break;
-            }
-            ret = avcodec_parameters_copy(bsfctx->par_in, codecpar);
-            if (ret < 0)
-            {
-                err = av_err2str(ret);
-                break;
-            }
-            ret = av_bsf_init(bsfctx);
-            if (ret < 0)
-            {
-                err = av_err2str(ret);
-                break;
+                if(avcodec_parameters_copy(bsfctx->par_in, codecpar) < 0 ||
+                    av_bsf_init(bsfctx) < 0)
+                {
+                    av_bsf_free(&bsfctx);
+                    continue;
+                }
+                bsfctxs[i.first] = bsfctx;
             }
         }
 
@@ -195,6 +173,7 @@ bool CDemux::demuxthread()
         {
             if (status_ != DEMUXING)
             {
+                ret = AVERROR_EOF;
                 break;
             }
 
@@ -202,17 +181,16 @@ bool CDemux::demuxthread()
             ret = av_read_frame(fmtctx_, packet);
             if (ret < 0)
             {
-                err = av_err2str(ret);
                 break; //这里认为视频读取完了
             }
             else if (demuxpacketcb_ != nullptr)
             {
-                if (packet->stream_index == vindex && bsfctx != nullptr)
+                if (bsfctxs[packet->stream_index] != nullptr)
                 {
+                    bsfctx = bsfctxs[packet->stream_index];
                     ret = av_bsf_send_packet(bsfctx, packet);
                     if (ret < 0)
                     {
-                        err = av_err2str(ret);
                         break;
                     }
                     while (ret >= 0)
@@ -226,22 +204,21 @@ bool CDemux::demuxthread()
                         else if (ret < 0)
                         {
                             // 其他错误
-                            err = av_err2str(ret);
                             if (demuxstatuscb_ != nullptr)
                             {
-                                demuxstatuscb_(DEMUXING, err, demuxstatuscbparam_);
+                                demuxstatuscb_(DEMUXING, ret, demuxstatuscbparam_);
                             }
                             break;
                         }
                         else
                         {
-                            demuxpacketcb_(packet, av_rescale_q_rnd(packet->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), demuxpacketcbparam_);
+                            demuxpacketcb_(packet, fmtctx_->streams[packet->stream_index]->time_base, demuxpacketcbparam_);
                         }
                     }
                 }
                 else
                 {
-                    demuxpacketcb_(packet, av_rescale_q_rnd(packet->pts, fmtctx_->streams[packet->stream_index]->time_base, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), demuxpacketcbparam_);
+                    demuxpacketcb_(packet, fmtctx_->streams[packet->stream_index]->time_base, demuxpacketcbparam_);
                 }
             }
 
@@ -252,30 +229,37 @@ bool CDemux::demuxthread()
     } while (true);
 
     // 清理bsf
-    av_bsf_free(&bsfctx);
+    for (auto& i : bsfctxs)
+    {
+        av_bsf_free(&i.second);
+    }
     // 清理packet
     av_packet_free(&packet);
 
     status_ = STOP;
     if (demuxstatuscb_ != nullptr)
     {
-        demuxstatuscb_(STOP, err, demuxstatuscbparam_);
+        demuxstatuscb_(STOP, ret, demuxstatuscbparam_);
     }
 
     return true;
 }
 
-int CDemux::get_steam_index(AVMediaType type, std::string& err)
+int CDemux::get_steam_index(AVMediaType type, int& index)
 {
     TRYLOCK();
-    err = "opt succeed.";
+    if (fmtctx_ == nullptr)
+    {
+        UNLOCK();
+        return EINVAL;
+    }
 
     int ret = av_find_best_stream(fmtctx_, type, -1, -1, nullptr, 0);
     UNLOCK();
-    if (ret < 0)
+    if (ret >= 0)
     {
-        err = av_err2str(ret);
-        return -1;
+        index = ret;
+        return 0;
     }
     else
     {
@@ -283,15 +267,14 @@ int CDemux::get_steam_index(AVMediaType type, std::string& err)
     }
 } 
 
-const AVCodecParameters* CDemux::get_steam_par(int index, std::string& err)
+int CDemux::get_steam_par(int index, const AVCodecParameters*& par)
 {
     TRYLOCK();
-    const AVCodecParameters* par = nullptr;
-    err = "opt succeed.";
 
     if (index < 0 || static_cast<unsigned int>(index) >= fmtctx_->nb_streams)
     {
-        err = "stream index err.";
+        UNLOCK();
+        return EINVAL;
     }
     else
     {
@@ -299,98 +282,86 @@ const AVCodecParameters* CDemux::get_steam_par(int index, std::string& err)
     }
     UNLOCK();
 
-    return par;
+    return 0;
 }
 
-bool CDemux::seek(int64_t timestamp, int index, int flags, std::string& err)
+int CDemux::seek(int64_t timestamp, int index, int flags)
 {
     TRYLOCK();
-    err = "opt succeed.";
 
     int ret = av_seek_frame(fmtctx_, index, av_rescale_q_rnd(timestamp, { 1, 1 }, fmtctx_->streams[index]->time_base, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX)), flags);
     UNLOCK();
-    if (ret < 0)
-    {
-        err = av_err2str(ret);
-        return false;
-    }
-    else
-    {
-        return true;
-    }
+    
+    return ret;
 }
 
-bool CDemux::device_register_all(std::string& err)
+int CDemux::device_register_all()
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     avdevice_register_all();
 
     return true;
 }
 
-bool CDemux::set_input_format(const std::string& fmt, std::string& err)
+int CDemux::set_input_format(const std::string& fmt)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     if (fmt.empty())
     {
-        err = "fmt is empty.";
-        return false;
+        return EINVAL;
     }
     else
     {
         fmt_ = av_find_input_format(fmt.c_str());
         if (fmt_ == nullptr)
         {
-            err = "can not find fmt " + fmt;
-            return false;
+            return AVERROR_BUG;
         }
     }
 
-    return true;
+    return 0;
 }
 
-bool CDemux::set_dic_opt(const std::string& key, const std::string& value, std::string& err)
+int CDemux::set_dic_opt(const std::string& key, const std::string& value)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     if (key.empty() || value.empty())
     {
-        err = "input is empty.";
-        return false;
+        return EINVAL;
     }
 
-    CHECKFFRET(av_dict_set(&dic_, key.c_str(), value.c_str(), 0));
-
-    return true;
+    return av_dict_set(&dic_, key.c_str(), value.c_str(), 0);
 }
 
-bool CDemux::free_opt(std::string& err)
+int CDemux::free_opt()
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
     av_dict_free(&dic_);
     fmt_ = nullptr;
+    bsfs_.clear();
 
-    return true;
+    return 0;
 }
 
-bool CDemux::set_bsf_name(const std::string& bsf, std::string& err)
+int CDemux::set_bsf_name(unsigned int index, const std::string& bsf)
 {
     LOCK();
-    CHECKSTOP(err);
-    err = "opt succeed.";
+    CHECKSTOP();
 
-    bsfname_ = bsf;
+    if (bsf.empty())
+    {
+        return EINVAL;
+    }
 
-    return true;
+    bsfs_[index] = bsf;
+
+    return 0;
 }

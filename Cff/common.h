@@ -36,8 +36,7 @@ static char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
 #define TRYLOCK()\
 if (!this->mutex_.try_lock())\
 {\
-    err = "it is busing.";\
-    return false;\
+    return EBUSY;\
 }
 #define UNLOCK()\
 {\
@@ -45,11 +44,10 @@ if (!this->mutex_.try_lock())\
 }
 
 // 检查停止状态
-#define CHECKSTOP(err) \
+#define CHECKSTOP() \
 if(this->status_ != STOP)\
 {\
-    err = "status is not stop.";\
-    return false;\
+    return EINVAL;\
 }
 #define CHECKNOTSTOP(err) \
 if(this->status_ == STOP)\
@@ -62,8 +60,7 @@ if(this->status_ == STOP)\
 #define CHECKFFRET(ret) \
 if (ret < 0)\
 {\
-    err = av_err2str(ret);\
-    return false;\
+    return ret;\
 }
 
 #endif//__COMMON_H__

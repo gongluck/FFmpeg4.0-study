@@ -34,28 +34,28 @@ int g_aindex_output = -1;
 int g_framesize = 1024;
 
 #define TESTCHECKRET(ret)\
-if(!ret)\
+if(ret != 0)\
 {\
-    std::cerr << err << std::endl;\
+    std::cerr << av_err2str(ret) << std::endl;\
 }
 
-void DemuxStatusCB(CDemux::STATUS status, const std::string& err, void* param)
+void DemuxStatusCB(CDemux::STATUS status, int err, void* param)
 {
-    std::cout << std::this_thread::get_id() << " got a status " << status << " " << err << std::endl;
+    std::cout << std::this_thread::get_id() << " got a status " << status << " " << av_err2str(err) << std::endl;
 }
 
-void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
+void DemuxPacketCB(const AVPacket* packet, AVRational timebase, void* param)
 {
-    /*std::cout << std::this_thread::get_id() <<
+    auto timestamp = av_rescale_q_rnd(packet->pts, timebase, { 1, 1 }, static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+    std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
-        " timestamp : " << timestamp << std::endl;*/
+        " timestamp : " << timestamp << std::endl;
 
 #ifdef SEEK
-    std::string err;
     CDemux* demux = static_cast<CDemux*>(param);
-    if (demux != nullptr && timestamp > 10 && !demux->seek(5, packet->stream_index, AVSEEK_FLAG_ANY, err))
+    if (demux != nullptr && timestamp > 10)
     {
-        std::cerr << err << std::endl;
+        TESTCHECKRET(demux->seek(5, packet->stream_index, AVSEEK_FLAG_ANY));
     }
 #endif
     if (packet->stream_index == g_vindex)
@@ -77,7 +77,7 @@ void DemuxPacketCB(const AVPacket* packet, int64_t timestamp, void* param)
     }
 }
 
-void DemuxPacketCB_save(const AVPacket* packet, int64_t timestamp, void* param)
+void DemuxPacketCB_save(const AVPacket* packet, AVRational timebase, void* param)
 {
     std::string err;
     auto output = static_cast<COutput*>(param);
@@ -97,7 +97,7 @@ void DemuxPacketCB_save(const AVPacket* packet, int64_t timestamp, void* param)
     }
 }
 
-void DemuxDesktopCB(const AVPacket* packet, int64_t timestamp, void* param)
+void DemuxDesktopCB(const AVPacket* packet, AVRational timebase, void* param)
 {
     /*std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
@@ -114,7 +114,7 @@ void DemuxDesktopCB(const AVPacket* packet, int64_t timestamp, void* param)
     }
 }
 
-void DemuxSystemSoundCB(const AVPacket* packet, int64_t timestamp, void* param)
+void DemuxSystemSoundCB(const AVPacket* packet, AVRational timebase, void* param)
 {
     /*std::cout << std::this_thread::get_id() <<
         " got a packet , index : " << packet->stream_index <<
@@ -345,39 +345,42 @@ void EncAudioFrameCB(const AVPacket * packet, void* param)
 // 解封装
 void test_demux()
 {
-    bool ret = false;
-    std::string err;
+    int ret = 0;
     CDemux demux;
 
-    ret = demux.set_input("in.flv", err);
-    //ret = demux.set_input("in.h264", err);
-    //ret = demux.set_input("in.aac", err);
+    ret = demux.set_input("in.flv");
+    //ret = demux.set_input("in.h264");
+    //ret = demux.set_input("in.aac");
     TESTCHECKRET(ret);
 
-    ret = demux.set_demux_callback(DemuxPacketCB, &demux, err);
+    ret = demux.set_demux_callback(DemuxPacketCB, &demux);
     TESTCHECKRET(ret);
 
-    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux, err);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux);
     TESTCHECKRET(ret);
 
-    ret = demux.set_bsf_name("h264_mp4toannexb", err);
+    ret = demux.openinput();
     TESTCHECKRET(ret);
 
-    ret = demux.openinput(err);
+    ret = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
+    TESTCHECKRET(ret);
+    std::cout << "v : " << g_vindex << std::endl;
+    ret = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
+    TESTCHECKRET(ret);
+    std::cout << "a : " << g_aindex << std::endl;
+
+    ret = demux.set_bsf_name(g_vindex, "h264_mp4toannexb");
+    TESTCHECKRET(ret);
+    ret = demux.set_bsf_name(g_aindex, "aac_adtstoasc"); // unuseable
     TESTCHECKRET(ret);
 
-    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
-    std::cout << err << std::endl;
-    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
-    std::cout << err << std::endl;
-
-    ret = demux.begindemux(err);
+    ret = demux.begindemux();
     TESTCHECKRET(ret);
 
     std::cout << "input to stop demuxing." << std::endl;
     std::cin.get();
 
-    ret = demux.stopdemux(err);
+    ret = demux.stopdemux();
     TESTCHECKRET(ret);
 }
 
@@ -569,40 +572,42 @@ void test_desktop()
     CDemux demux;
     CDecode decode;
 
-    ret = demux.device_register_all(err);
+    ret = demux.device_register_all();
     TESTCHECKRET(ret);
-    ret = demux.set_input_format("gdigrab", err); //采集桌面
+    ret = demux.set_input_format("gdigrab"); //采集桌面
     TESTCHECKRET(ret);
-    ret = demux.set_dic_opt("framerate", "15", err);
+    ret = demux.set_dic_opt("framerate", "15");
     TESTCHECKRET(ret);
-    ret = demux.set_demux_callback(DemuxDesktopCB, &decode, err);
+    ret = demux.set_demux_callback(DemuxDesktopCB, &decode);
     TESTCHECKRET(ret);
-    ret = demux.set_demux_status_callback(DemuxStatusCB, nullptr, err);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, nullptr);
     TESTCHECKRET(ret);
-    ret = demux.set_input("desktop", err);
+    ret = demux.set_input("desktop");
     TESTCHECKRET(ret);
-    ret = demux.openinput(err);
+    ret = demux.openinput();
     TESTCHECKRET(ret);
 
-    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+    ret = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
     std::cout << err << std::endl;
-    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    ret = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
     std::cout << err << std::endl;
 
     ret = decode.set_dec_callback(DecVideoFrameCB, nullptr, err);
     TESTCHECKRET(ret);
-    ret = decode.copy_param(demux.get_steam_par(g_vindex, err), err);
+    const AVCodecParameters* par = nullptr;
+    demux.get_steam_par(g_vindex, par);
+    ret = decode.copy_param(par, err);
     TESTCHECKRET(ret);
     ret = decode.codec_open(err);
     TESTCHECKRET(ret);
 
-    ret = demux.begindemux(err);
+    ret = demux.begindemux();
     TESTCHECKRET(ret);
 
     std::cout << "input to stop demuxing." << std::endl;
     std::cin.get();
 
-    ret = demux.stopdemux(err);
+    ret = demux.stopdemux();
     TESTCHECKRET(ret);
 }
 
@@ -614,40 +619,42 @@ void test_systemsound()
     CDemux demux;
     CDecode decode;
 
-    ret = demux.device_register_all(err);
+    ret = demux.device_register_all();
     TESTCHECKRET(ret);
-    ret = demux.set_input_format("dshow", err); //采集声卡
+    ret = demux.set_input_format("dshow"); //采集声卡
     TESTCHECKRET(ret);
-    ret = demux.set_dic_opt("framerate", "15", err);
+    ret = demux.set_dic_opt("framerate", "15");
     TESTCHECKRET(ret);
-    ret = demux.set_demux_callback(DemuxSystemSoundCB, &decode, err);
+    ret = demux.set_demux_callback(DemuxSystemSoundCB, &decode);
     TESTCHECKRET(ret);
-    ret = demux.set_demux_status_callback(DemuxStatusCB, nullptr, err);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, nullptr);
     TESTCHECKRET(ret);
-    ret = demux.set_input("audio=virtual-audio-capturer", err);
+    ret = demux.set_input("audio=virtual-audio-capturer");
     TESTCHECKRET(ret);
-    ret = demux.openinput(err);
+    ret = demux.openinput();
     TESTCHECKRET(ret);
 
-    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
     std::cout << err << std::endl;
-    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
     std::cout << err << std::endl;
 
     ret = decode.set_dec_callback(DecAudioFrameCB, nullptr, err);
     TESTCHECKRET(ret);
-    ret = decode.copy_param(demux.get_steam_par(g_aindex, err), err);
+    const AVCodecParameters* par = nullptr;
+    demux.get_steam_par(g_aindex, par);
+    ret = decode.copy_param(par, err);
     TESTCHECKRET(ret);
     ret = decode.codec_open(err);
     TESTCHECKRET(ret);
 
-    ret = demux.begindemux(err);
+    ret = demux.begindemux();
     TESTCHECKRET(ret);
 
     std::cout << "input to stop demuxing." << std::endl;
     std::cin.get();
 
-    ret = demux.stopdemux(err);
+    ret = demux.stopdemux();
     TESTCHECKRET(ret);
 }
 
@@ -659,20 +666,21 @@ void test_output_h264()
     CDemux demux;
     COutput output;
 
-    ret = demux.set_input("in.flv", err);
+    ret = demux.set_input("in.flv");
     TESTCHECKRET(ret);
-    ret = demux.set_demux_callback(DemuxPacketCB_save, &output, err);
+    ret = demux.set_demux_callback(DemuxPacketCB_save, &output);
     TESTCHECKRET(ret);
-    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux, err);
-    TESTCHECKRET(ret);
-
-    ret = demux.openinput(err);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux);
     TESTCHECKRET(ret);
 
-    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+    ret = demux.openinput();
+    TESTCHECKRET(ret);
+
+    g_vindex = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
     std::cout << err << std::endl;
 
-    auto par = demux.get_steam_par(g_vindex, err);
+    const AVCodecParameters* par = nullptr;
+    ret = demux.get_steam_par(g_vindex, par);
     TESTCHECKRET(ret);
 
     ret = output.set_output("out.h264", err);
@@ -683,7 +691,7 @@ void test_output_h264()
     ret = output.open(err);
     TESTCHECKRET(ret);
 
-    ret = demux.begindemux(err);
+    ret = demux.begindemux();
     TESTCHECKRET(ret);
 
     std::cout << "input to stop demuxing." << std::endl;
@@ -692,7 +700,7 @@ void test_output_h264()
     ret = output.close(err);
     TESTCHECKRET(ret);
 
-    ret = demux.stopdemux(err);
+    ret = demux.stopdemux();
     TESTCHECKRET(ret);
 }
 
@@ -704,20 +712,21 @@ void test_output_aac()
     CDemux demux;
     COutput output;
 
-    ret = demux.set_input("in.flv", err);
+    ret = demux.set_input("in.flv");
     TESTCHECKRET(ret);
-    ret = demux.set_demux_callback(DemuxPacketCB_save, &output, err);
+    ret = demux.set_demux_callback(DemuxPacketCB_save, &output);
     TESTCHECKRET(ret);
-    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux, err);
-    TESTCHECKRET(ret);
-
-    ret = demux.openinput(err);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux);
     TESTCHECKRET(ret);
 
-    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    ret = demux.openinput();
+    TESTCHECKRET(ret);
+
+    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
     std::cout << err << std::endl;
 
-    auto par = demux.get_steam_par(g_aindex, err);
+    const AVCodecParameters* par = nullptr;
+    ret = demux.get_steam_par(g_aindex, par);
     TESTCHECKRET(ret);
 
     ret = output.set_output("out.aac", err);
@@ -728,7 +737,7 @@ void test_output_aac()
     ret = output.open(err);
     TESTCHECKRET(ret);
 
-    ret = demux.begindemux(err);
+    ret = demux.begindemux();
     TESTCHECKRET(ret);
 
     std::cout << "input to stop demuxing." << std::endl;
@@ -737,7 +746,7 @@ void test_output_aac()
     ret = output.close(err);
     TESTCHECKRET(ret);
 
-    ret = demux.stopdemux(err);
+    ret = demux.stopdemux();
     TESTCHECKRET(ret);
 }
 
@@ -749,20 +758,21 @@ void test_output_mp3()
     CDemux demux;
     COutput output;
 
-    ret = demux.set_input("in.mkv", err);
+    ret = demux.set_input("in.mkv");
     TESTCHECKRET(ret);
-    ret = demux.set_demux_callback(DemuxPacketCB_save, &output, err);
+    ret = demux.set_demux_callback(DemuxPacketCB_save, &output);
     TESTCHECKRET(ret);
-    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux, err);
-    TESTCHECKRET(ret);
-
-    ret = demux.openinput(err);
+    ret = demux.set_demux_status_callback(DemuxStatusCB, &demux);
     TESTCHECKRET(ret);
 
-    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    ret = demux.openinput();
+    TESTCHECKRET(ret);
+
+    g_aindex = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
     std::cout << err << std::endl;
 
-    auto par = demux.get_steam_par(g_aindex, err);
+    const AVCodecParameters* par = nullptr;
+    ret = demux.get_steam_par(g_aindex, par);
     TESTCHECKRET(ret);
 
     ret = output.set_output("out.mp3", err);
@@ -773,7 +783,7 @@ void test_output_mp3()
     ret = output.open(err);
     TESTCHECKRET(ret);
 
-    ret = demux.begindemux(err);
+    ret = demux.begindemux();
     TESTCHECKRET(ret);
 
     std::cout << "input to stop demuxing." << std::endl;
@@ -782,7 +792,7 @@ void test_output_mp3()
     ret = output.close(err);
     TESTCHECKRET(ret);
 
-    ret = demux.stopdemux(err);
+    ret = demux.stopdemux();
     TESTCHECKRET(ret);
 }
 
@@ -887,27 +897,29 @@ void test_screen_capture()
     COutput output;
 
     //采集桌面
-    ret = demuxdesktop.device_register_all(err);
+    ret = demuxdesktop.device_register_all();
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_input_format("gdigrab", err); //采集桌面
+    ret = demuxdesktop.set_input_format("gdigrab"); //采集桌面
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_dic_opt("framerate", "30", err);
+    ret = demuxdesktop.set_dic_opt("framerate", "30");
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_demux_callback(DemuxDesktopCB, &decodedesktop, err);
+    ret = demuxdesktop.set_demux_callback(DemuxDesktopCB, &decodedesktop);
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_demux_status_callback(DemuxStatusCB, nullptr, err);
+    ret = demuxdesktop.set_demux_status_callback(DemuxStatusCB, nullptr);
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_input("desktop", err);
+    ret = demuxdesktop.set_input("desktop");
     TESTCHECKRET(ret);
-    ret = demuxdesktop.openinput(err);
+    ret = demuxdesktop.openinput();
     TESTCHECKRET(ret);
 
-    g_vindex = demuxdesktop.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+    g_vindex = demuxdesktop.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
     std::cout << err << std::endl;
 
     ret = decodedesktop.set_dec_callback(DecVideoFrameCB, &encodedesktop, err);
     TESTCHECKRET(ret);
-    ret = decodedesktop.copy_param(demuxdesktop.get_steam_par(g_vindex, err), err);
+    const AVCodecParameters* par = nullptr;
+    demuxdesktop.get_steam_par(g_vindex, par);
+    ret = decodedesktop.copy_param(par, err);
     TESTCHECKRET(ret);
     ret = decodedesktop.codec_open(err);
     TESTCHECKRET(ret);
@@ -931,14 +943,14 @@ void test_screen_capture()
     // 开始
     ret = output.open(err);
     TESTCHECKRET(ret);
-    ret = demuxdesktop.begindemux(err);
+    ret = demuxdesktop.begindemux();
     TESTCHECKRET(ret);
 
     std::cout << "input to stop demuxing." << std::endl;
     std::cin.get();
 
     // 结束
-    ret = demuxdesktop.stopdemux(err);
+    ret = demuxdesktop.stopdemux();
     TESTCHECKRET(ret);
     ret = encodedesktop.close(err);
     TESTCHECKRET(ret);
@@ -957,27 +969,29 @@ void test_record()
     COutput output;
 
     // 采集系统声音
-    ret = demuxsound.device_register_all(err);
+    ret = demuxsound.device_register_all();
     TESTCHECKRET(ret);
-    ret = demuxsound.set_input_format("dshow", err); //采集声卡
+    ret = demuxsound.set_input_format("dshow"); //采集声卡
     TESTCHECKRET(ret);
-    ret = demuxsound.set_dic_opt("framerate", "15", err);
+    ret = demuxsound.set_dic_opt("framerate", "15");
     TESTCHECKRET(ret);
-    ret = demuxsound.set_demux_callback(DemuxSystemSoundCB, &decodesound, err);
+    ret = demuxsound.set_demux_callback(DemuxSystemSoundCB, &decodesound);
     TESTCHECKRET(ret);
-    ret = demuxsound.set_demux_status_callback(DemuxStatusCB, nullptr, err);
+    ret = demuxsound.set_demux_status_callback(DemuxStatusCB, nullptr);
     TESTCHECKRET(ret);
-    ret = demuxsound.set_input("audio=virtual-audio-capturer", err);
+    ret = demuxsound.set_input("audio=virtual-audio-capturer");
     TESTCHECKRET(ret);
-    ret = demuxsound.openinput(err);
+    ret = demuxsound.openinput();
     TESTCHECKRET(ret);
 
-    g_aindex = demuxsound.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    g_aindex = demuxsound.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
     std::cout << err << std::endl;
 
     ret = decodesound.set_dec_callback(DecAudioFrameCB, &encodesound, err);
     TESTCHECKRET(ret);
-    ret = decodesound.copy_param(demuxsound.get_steam_par(g_aindex, err), err);
+    const AVCodecParameters* par = nullptr;
+    demuxsound.get_steam_par(g_aindex, par);
+    ret = decodesound.copy_param(par, err);
     TESTCHECKRET(ret);
     ret = decodesound.codec_open(err);
     TESTCHECKRET(ret);
@@ -1004,14 +1018,14 @@ void test_record()
     // 开始
     ret = output.open(err);
     TESTCHECKRET(ret);
-    ret = demuxsound.begindemux(err);
+    ret = demuxsound.begindemux();
     TESTCHECKRET(ret);
 
     std::cout << "input to stop demuxing." << std::endl;
     std::cin.get();
 
     // 结束
-    ret = demuxsound.stopdemux(err);
+    ret = demuxsound.stopdemux();
     TESTCHECKRET(ret);
     ret = encodesound.close(err);
     TESTCHECKRET(ret);
@@ -1033,53 +1047,56 @@ void test_capture_record()
     COutput output;
 
     //采集桌面
-    ret = demuxdesktop.device_register_all(err);
+    ret = demuxdesktop.device_register_all();
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_input_format("gdigrab", err); //采集桌面
+    ret = demuxdesktop.set_input_format("gdigrab"); //采集桌面
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_dic_opt("framerate", "30", err);
+    ret = demuxdesktop.set_dic_opt("framerate", "30");
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_demux_callback(DemuxDesktopCB, &decodedesktop, err);
+    ret = demuxdesktop.set_demux_callback(DemuxDesktopCB, &decodedesktop);
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_demux_status_callback(DemuxStatusCB, nullptr, err);
+    ret = demuxdesktop.set_demux_status_callback(DemuxStatusCB, nullptr);
     TESTCHECKRET(ret);
-    ret = demuxdesktop.set_input("desktop", err);
+    ret = demuxdesktop.set_input("desktop");
     TESTCHECKRET(ret);
-    ret = demuxdesktop.openinput(err);
+    ret = demuxdesktop.openinput();
     TESTCHECKRET(ret);
 
-    g_vindex = demuxdesktop.get_steam_index(AVMEDIA_TYPE_VIDEO, err);
+    g_vindex = demuxdesktop.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
     std::cout << err << std::endl;
 
     ret = decodedesktop.set_dec_callback(DecVideoFrameCB, &encodedesktop, err);
     TESTCHECKRET(ret);
-    ret = decodedesktop.copy_param(demuxdesktop.get_steam_par(g_vindex, err), err);
+    const AVCodecParameters* par = nullptr;
+    demuxdesktop.get_steam_par(g_vindex, par);
+    ret = decodedesktop.copy_param(par, err);
     TESTCHECKRET(ret);
     ret = decodedesktop.codec_open(err);
     TESTCHECKRET(ret);
 
     // 采集系统声音
-    ret = demuxsound.device_register_all(err);
+    ret = demuxsound.device_register_all();
     TESTCHECKRET(ret);
-    ret = demuxsound.set_input_format("dshow", err); //采集声卡
+    ret = demuxsound.set_input_format("dshow"); //采集声卡
     TESTCHECKRET(ret);
-    ret = demuxsound.set_dic_opt("framerate", "15", err);
+    ret = demuxsound.set_dic_opt("framerate", "15");
     TESTCHECKRET(ret);
-    ret = demuxsound.set_demux_callback(DemuxSystemSoundCB, &decodesound, err);
+    ret = demuxsound.set_demux_callback(DemuxSystemSoundCB, &decodesound);
     TESTCHECKRET(ret);
-    ret = demuxsound.set_demux_status_callback(DemuxStatusCB, nullptr, err);
+    ret = demuxsound.set_demux_status_callback(DemuxStatusCB, nullptr);
     TESTCHECKRET(ret);
-    ret = demuxsound.set_input("audio=virtual-audio-capturer", err);
+    ret = demuxsound.set_input("audio=virtual-audio-capturer");
     TESTCHECKRET(ret);
-    ret = demuxsound.openinput(err);
+    ret = demuxsound.openinput();
     TESTCHECKRET(ret);
 
-    g_aindex = demuxsound.get_steam_index(AVMEDIA_TYPE_AUDIO, err);
+    g_aindex = demuxsound.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
     std::cout << err << std::endl;
 
     ret = decodesound.set_dec_callback(DecAudioFrameCB, &encodesound, err);
     TESTCHECKRET(ret);
-    ret = decodesound.copy_param(demuxsound.get_steam_par(g_aindex, err), err);
+    demuxdesktop.get_steam_par(g_aindex, par);
+    ret = decodesound.copy_param(par, err);
     TESTCHECKRET(ret);
     ret = decodesound.codec_open(err);
     TESTCHECKRET(ret);
@@ -1117,18 +1134,18 @@ void test_capture_record()
     // 开始
     ret = output.open(err);
     TESTCHECKRET(ret);
-    ret = demuxdesktop.begindemux(err);
+    ret = demuxdesktop.begindemux();
     TESTCHECKRET(ret);
-    ret = demuxsound.begindemux(err);
+    ret = demuxsound.begindemux();
     TESTCHECKRET(ret);
 
     std::cout << "input to stop demuxing." << std::endl;
     std::cin.get();
 
     // 结束
-    ret = demuxdesktop.stopdemux(err);
+    ret = demuxdesktop.stopdemux();
     TESTCHECKRET(ret);
-    ret = demuxsound.stopdemux(err);
+    ret = demuxsound.stopdemux();
     TESTCHECKRET(ret);
     ret = encodedesktop.close(err);
     TESTCHECKRET(ret);
@@ -1141,7 +1158,7 @@ void test_capture_record()
 int main()
 {
     //av_log_set_level(AV_LOG_MAX_OFFSET);
-    //test_demux();
+    test_demux();
     //test_decode_h264();
     //test_decode_aac();
     //test_decode_mp3();
@@ -1156,6 +1173,6 @@ int main()
     //test_encode_mp3();
     //test_screen_capture();
     //test_record();
-    test_capture_record();
+    //test_capture_record();
     return 0;
 }

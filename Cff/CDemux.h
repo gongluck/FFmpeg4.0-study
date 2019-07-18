@@ -25,9 +25,12 @@ extern "C"
 }
 #endif
 
+#include "common.h"
 #include <string>
 #include <mutex>
 #include <thread>
+#include <map>
+#include <functional>
 
 class CDemux
 {
@@ -36,50 +39,50 @@ public:
     // 状态
     enum STATUS { STOP, DEMUXING };
     // 状态通知回调声明
-    typedef void (*DemuxStatusCallback)(STATUS status, const std::string& err, void* param);
+    typedef void (*DemuxStatusCallback)(STATUS status, int err, void* param);
     // 解封装帧回调声明
-    typedef void (*DemuxPacketCallback)(const AVPacket* packet, int64_t timestamp, void* param);
+    typedef void (*DemuxPacketCallback)(const AVPacket* packet, AVRational timebase, void* param);
 
     // 设置输入
-    bool set_input(const std::string& input, std::string& err);
+    int set_input(const std::string& input);
     // 获取输入
-    const std::string& get_input(std::string& err);
+    int get_input(std::string& input);
 
     // 设置解封装帧回调 
-    bool set_demux_callback(DemuxPacketCallback cb, void* param, std::string& err);
+    int set_demux_callback(DemuxPacketCallback cb, void* param);
     // 设置解封装状态变化回调
-    bool set_demux_status_callback(DemuxStatusCallback cb, void* param, std::string& err);
+    int set_demux_status_callback(DemuxStatusCallback cb, void* param);
 
     // 打开输入
-    bool openinput(std::string& err);
+    int openinput();
     // 开始解封装
-    bool begindemux(std::string& err);
+    int begindemux();
     // 停止解封装
-    bool stopdemux(std::string& err);
+    int stopdemux();
 
     // 获取流索引
-    int get_steam_index(AVMediaType type, std::string& err);
+    int get_steam_index(AVMediaType type, int& index);
     // 获取流参数
-    const AVCodecParameters* get_steam_par(int index, std::string& err);
+    int get_steam_par(int index, const AVCodecParameters*& par);
 
     // 跳转到指定秒
-    bool seek(int64_t timestamp, int index, int flags, std::string& err);
+    int seek(int64_t timestamp, int index, int flags);
 
     // 启用设备采集
-    bool device_register_all(std::string& err);
+    int device_register_all();
     // 设置输入格式
-    bool set_input_format(const std::string& fmt, std::string& err);
+    int set_input_format(const std::string& fmt);
     // 设置附加参数
-    bool set_dic_opt(const std::string& key, const std::string& value, std::string& err);
+    int set_dic_opt(const std::string& key, const std::string& value);
     // 清理设置
-    bool free_opt(std::string& err);
+    int free_opt();
 
     // 设置bsf名称，影响回调的packet数据能否直接播放
-    bool set_bsf_name(const std::string& bsf, std::string& err);
+    int set_bsf_name(unsigned int index, const std::string& bsf);
 
 private:
     // 解封装线程
-    bool demuxthread();
+    int demuxthread();
 
 private:
     STATUS status_ = STOP;
@@ -88,16 +91,16 @@ private:
     std::string input_;
     std::thread demuxth_;
 
-    DemuxStatusCallback demuxstatuscb_ = nullptr;
+    std::function<void(STATUS, int, void*)> demuxstatuscb_ = nullptr;
     void* demuxstatuscbparam_ = nullptr;
-    DemuxPacketCallback demuxpacketcb_ = nullptr;
+    std::function<void(const AVPacket*, AVRational, void*)> demuxpacketcb_ = nullptr;
     void* demuxpacketcbparam_ = nullptr;
 
     //ffmpeg
     AVFormatContext* fmtctx_ = nullptr;
     AVInputFormat* fmt_ = nullptr;
     AVDictionary* dic_ = nullptr;
-    std::string bsfname_;
+    std::map<unsigned int, std::string> bsfs_;
 };
 
 #endif//__CDEMUX_H__
