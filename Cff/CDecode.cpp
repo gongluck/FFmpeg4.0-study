@@ -15,61 +15,54 @@
 
 CDecode::~CDecode()
 {
-    std::string err;
-    clean_opt(err);
+    clean_opt();
 }
 
-bool CDecode::set_dec_callback(DecFrameCallback cb, void* param, std::string& err)
+int CDecode::set_dec_callback(DecFrameCallback cb, void* param)
 {
     LOCK();
-    err = "opt succeed.";
 
     decframecb_ = cb;
     decframecbparam_ = param;
 
-    return true;
+    return 0;
 }
 
-bool CDecode::set_hwdec_type(AVHWDeviceType hwtype, bool trans, std::string& err)
+int CDecode::set_hwdec_type(AVHWDeviceType hwtype, bool trans)
 {
     LOCK();
-    err = "opt succeed.";
 
     hwtype_ = hwtype;
     trans_ = trans;
 
-    return true;
+    return 0;
 }
 
-bool CDecode::set_codeid(AVCodecID id, std::string& err)
+int CDecode::set_codeid(AVCodecID id)
 {
     LOCK();
-    err = "opt succeed.";
-    int ret;
+    int ret = 0;
 
-    if (!clean_opt(err))
-    {
-        return false;
-    }
+    CHECKFFRET(clean_opt());
 
     do
     {
         codec_ = avcodec_find_decoder(id);
         if (codec_ == nullptr)
         {
-            err = "avcodec_find_decoder return nullptr";
+            ret = EINVAL;
             break;
         }
         codectx_ = avcodec_alloc_context3(codec_);
         if (codectx_ == nullptr)
         {
-            err = "avcodec_alloc_context3 return nullptr";
+            ret = AVERROR_BUG;
             break;
         }
         par_ = av_parser_init(codec_->id);
         if (par_ == nullptr)
         {
-            err = "av_parser_init return nullptr";
+            ret = EINVAL;
             //break;
         }
 
@@ -81,7 +74,7 @@ bool CDecode::set_codeid(AVCodecID id, std::string& err)
                 const AVCodecHWConfig* config = avcodec_get_hw_config(codec_, i);
                 if (config == nullptr)
                 {
-                    err = codec_->name + std::string(" not support ") + av_hwdevice_get_type_name(hwtype_);
+                    ret = EINVAL;
                     break;
                 }
                 if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
@@ -92,7 +85,6 @@ bool CDecode::set_codeid(AVCodecID id, std::string& err)
                     ret = av_hwdevice_ctx_create(&hwbufref, hwtype_, nullptr, nullptr, 0);
                     if (ret < 0)
                     {
-                        err = av_err2str(ret);
                         break;
                     }
                     else
@@ -100,88 +92,62 @@ bool CDecode::set_codeid(AVCodecID id, std::string& err)
                         codectx_->hw_device_ctx = av_buffer_ref(hwbufref);
                         if (codectx_->hw_device_ctx == nullptr)
                         {
-                            err = "av_buffer_ref(hwbufref) return nullptr.";
+                            ret = AVERROR_BUG;
                             break;
                         }
                         av_buffer_unref(&hwbufref);
                         hwfmt_ = config->pix_fmt;
-                        return true;
+                        return 0;
                     }
                 }
             }
+            // 执行出错
+            break;
         }
-        return true;
+        // 执行成功
+        return ret;
     } while (true);
 
-    std::string e;
-    clean_opt(e);
-    return false;
+    // 执行出错
+    clean_opt();
+    return ret;
 }
 
-bool CDecode::copy_param(const AVCodecParameters* par, std::string& err)
+int CDecode::copy_param(const AVCodecParameters* par)
 {
     LOCK();
-    err = "opt succeed.";
-    int ret = 0;
 
-    if (par == nullptr)
+    if (codectx_ == nullptr || par == nullptr)
     {
-        err = "par is nullptr";
-        return false;
+        return EINVAL;
     }
-    if (!set_codeid(par->codec_id, err))
-    {
-        return false;
-    }
-    
-    ret = avcodec_parameters_to_context(codectx_, par);
-    if (ret < 0)
-    {
-        clean_opt(err);
-        err = av_err2str(ret);
-        return false;
-    }
+    CHECKFFRET(set_codeid(par->codec_id));
+    CHECKFFRET(avcodec_parameters_to_context(codectx_, par));
 
-    return true;
+    return 0;
 }
 
-bool CDecode::codec_open(std::string& err)
+int CDecode::codec_open()
 {
     LOCK();
-    err = "opt succeed.";
-    int ret = 0;
 
     if (codectx_ == nullptr || codec_ == nullptr)
     {
-        err = "codectx_ is nullptr or codec_ is nullptr";
-        return false;
+        return EINVAL;
     }
+    CHECKFFRET(avcodec_open2(codectx_, codec_, nullptr));
 
-    ret = avcodec_open2(codectx_, codec_, nullptr);
-    if (ret < 0)
-    {
-        err = av_err2str(ret);
-        return false;
-    }
-
-    return true;
+    return 0;
 }
 
-bool CDecode::decode(const AVPacket* packet, std::string& err)
+int CDecode::decode(const AVPacket* packet)
 {
     LOCK();
-    err = "opt succeed.";
     int ret = 0;
 
-    if (packet == nullptr)
+    if (packet == nullptr || codectx_ == nullptr)
     {
-        err == "packet is nullptr.";
-        return false;
-    }
-    else if (codectx_ == nullptr)
-    {
-        err = "codectx_ is nullptr.";
-        return false;
+        return EINVAL;
     }
     
     // 发送将要解码的数据
@@ -192,26 +158,19 @@ bool CDecode::decode(const AVPacket* packet, std::string& err)
     AVFrame* traframe = av_frame_alloc();
     if (frame == nullptr || traframe == nullptr)
     {
-        err = "av_frame_alloc() return nullptr.";
         av_frame_free(&frame);
         av_frame_free(&traframe);
-        return false;
+        return AVERROR_BUG;
     }
 
     while (ret >= 0)
     {
         // 接收解码数据
         ret = avcodec_receive_frame(codectx_, frame);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+        if (ret < 0) 
         {
             // 不完整或者EOF
-            err = av_err2str(ret);
-            break;
-        }
-        else if (ret < 0)
-        {
             // 其他错误
-            err = av_err2str(ret);
             break;
         }
         else
@@ -227,7 +186,6 @@ bool CDecode::decode(const AVPacket* packet, std::string& err)
                     ret = av_hwframe_transfer_data(traframe, frame, 0);
                     if (ret < 0)
                     {
-                        err = av_err2str(ret);
                         break;
                     }
                     else
@@ -249,24 +207,17 @@ bool CDecode::decode(const AVPacket* packet, std::string& err)
 
     av_frame_free(&frame);
     av_frame_free(&traframe);
-    return true;
+    return ret;
 }
 
-bool CDecode::decode(const void* data, uint32_t size, std::string& err)
+int CDecode::decode(const void* data, uint32_t size)
 {
     LOCK();
-    err = "opt succeed.";
     int ret = 0;
 
-    if (par_ == nullptr)
+    if (par_ == nullptr || codectx_ == nullptr)
     {
-        err == "par_ is nullptr.";
-        return false;
-    }
-    else if (codectx_ == nullptr)
-    {
-        err = "codectx_ is nullptr.";
-        return false;
+        return EINVAL;
     }
 
     int pos = 0;
@@ -279,22 +230,25 @@ bool CDecode::decode(const void* data, uint32_t size, std::string& err)
 
         if (pkt_.size > 0)
         {
-            ret = decode(&pkt_, err);
-            CHECKFFRET(ret);
+            ret = decode(&pkt_);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF))
+            {
+                continue;
+            }
         }
     }
 
-    return true;
+    return 0;
 }
 
-bool CDecode::clean_opt(std::string& err)
+int CDecode::clean_opt()
 {
     LOCK();
-    err = "opt succeed.";
 
     codec_ = nullptr;
     av_parser_close(par_);
+    par_ = nullptr;
     avcodec_free_context(&codectx_);
 
-    return true;
+    return 0;
 }

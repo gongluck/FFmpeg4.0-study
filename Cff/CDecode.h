@@ -26,6 +26,7 @@ extern "C"
 
 #include <string>
 #include <mutex>
+#include <functional>
 
 class CDecode
 {
@@ -35,29 +36,29 @@ public:
     typedef void (*DecFrameCallback)(const AVFrame* frame, void* param);
 
     // 设置解码帧回调 
-    bool set_dec_callback(DecFrameCallback cb, void* param, std::string& err);
+    int set_dec_callback(DecFrameCallback cb, void* param);
 
     // 设置硬解
-    bool set_hwdec_type(AVHWDeviceType hwtype, bool trans, std::string& err);
+    int set_hwdec_type(AVHWDeviceType hwtype, bool trans);
 
     // 设置解码器
-    bool set_codeid(AVCodecID id, std::string& err);
-    bool copy_param(const AVCodecParameters* par, std::string& err);
+    int set_codeid(AVCodecID id);
+    int copy_param(const AVCodecParameters* par);
 
     // 打开解码器
-    bool codec_open(std::string& err);
+    int codec_open();
 
     // 解码
-    bool decode(const AVPacket* packet, std::string& err);
-    bool decode(const void* data, uint32_t size, std::string& err);
+    int decode(const AVPacket* packet);
+    int decode(const void* data, uint32_t size);
 
     // 清理资源
-    bool clean_opt(std::string& err);
+    int clean_opt();
 
 private:
     std::recursive_mutex mutex_;
 
-    DecFrameCallback decframecb_ = nullptr;
+    std::function<void(const AVFrame*, void*)> decframecb_ = nullptr;
     void* decframecbparam_ = nullptr;
 
     //ffmpeg
