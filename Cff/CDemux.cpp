@@ -170,6 +170,7 @@ int CDemux::demuxthread()
         // 循环读数据解码数据
         while (true)
         {
+            av_usleep(10);
             if (status_ != DEMUXING)
             {
                 ret = AVERROR_EOF;
@@ -198,6 +199,7 @@ int CDemux::demuxthread()
                         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                         {
                             // 不完整或者EOF
+                            av_usleep(10);
                             break;
                         }
                         else if (ret < 0)

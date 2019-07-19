@@ -19,6 +19,7 @@ extern "C"
 #endif
 
 #include <libavutil/error.h>
+#include <libavutil/time.h>
 
 #ifdef __cplusplus
 }

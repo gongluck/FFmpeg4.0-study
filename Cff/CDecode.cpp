@@ -231,6 +231,7 @@ int CDecode::decode(const void* data, uint32_t size)
             ret = decode(&pkt_);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF))
             {
+                av_usleep(10);
                 continue;
             }
         }

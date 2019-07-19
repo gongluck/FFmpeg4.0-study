@@ -55,7 +55,8 @@ void DemuxPacketCB(const AVPacket* packet, AVRational timebase, void* param)
     CDemux* demux = static_cast<CDemux*>(param);
     if (demux != nullptr && timestamp > 10)
     {
-        TESTCHECKRET(demux->seek(5, packet->stream_index, AVSEEK_FLAG_ANY));
+        int ret = demux->seek(5, packet->stream_index, AVSEEK_FLAG_ANY);
+        TESTCHECKRET(ret);
     }
 #endif
     if (packet->stream_index == g_vindex)
@@ -89,7 +90,8 @@ void DemuxPacketCB_save(const AVPacket* packet, AVRational timebase, void* param
     {
         auto pkt = const_cast<AVPacket*>(packet);
         pkt->stream_index = g_vindex_output == -1 ? g_aindex_output : g_vindex_output;
-        TESTCHECKRET(output->write_frame(pkt));
+        int ret = output->write_frame(pkt);
+        TESTCHECKRET(ret);
     }
 }
 
@@ -141,9 +143,12 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
                 f.format = AV_PIX_FMT_YUV420P;
                 av_frame_get_buffer(&f, 1);
 
-                TESTCHECKRET(sws.set_src_opt(static_cast<AVPixelFormat>(frame->format), frame->width, frame->height));
-                TESTCHECKRET(sws.set_dst_opt(AV_PIX_FMT_YUV420P, 1920, 1080));
-                TESTCHECKRET(sws.lock_opt());
+                int ret = sws.set_src_opt(static_cast<AVPixelFormat>(frame->format), frame->width, frame->height);
+                TESTCHECKRET(ret);
+                ret = sws.set_dst_opt(AV_PIX_FMT_YUV420P, 1920, 1080);
+                TESTCHECKRET(ret);
+                ret = sws.lock_opt();
+                TESTCHECKRET(ret);
 
                 binit = true;
             }
@@ -226,9 +231,12 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
                 ff.channel_layout = AV_CH_LAYOUT_STEREO;
                 av_frame_get_buffer(&ff, 1);
 
-                TESTCHECKRET(swr.set_src_opt(AV_CH_LAYOUT_STEREO, frame->sample_rate, static_cast<AVSampleFormat>(frame->format)));
-                TESTCHECKRET(swr.set_dst_opt(AV_CH_LAYOUT_STEREO, fltp_frame.sample_rate, static_cast<AVSampleFormat>(fltp_frame.format)));
-                TESTCHECKRET(swr.lock_opt());
+                int ret = swr.set_src_opt(AV_CH_LAYOUT_STEREO, frame->sample_rate, static_cast<AVSampleFormat>(frame->format));
+                TESTCHECKRET(ret);
+                ret = swr.set_dst_opt(AV_CH_LAYOUT_STEREO, fltp_frame.sample_rate, static_cast<AVSampleFormat>(fltp_frame.format));
+                TESTCHECKRET(ret);
+                ret = swr.lock_opt();
+                TESTCHECKRET(ret);
 
                 binit = true;
             }
@@ -271,7 +279,8 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
         }
         else
         {
-            TESTCHECKRET(enc->encode(frame));
+            int ret = enc->encode(frame);
+            TESTCHECKRET(ret);
             return;
         }
     }
