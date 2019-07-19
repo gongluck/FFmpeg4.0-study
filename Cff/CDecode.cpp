@@ -61,7 +61,8 @@ int CDecode::set_codeid(AVCodecID id)
         par_ = av_parser_init(codec_->id);
         if (par_ == nullptr)
         {
-            ret = AVERROR(EINVAL);
+            ret = 0;
+            //ret = AVERROR(EINVAL);
             //break;
         }
 
