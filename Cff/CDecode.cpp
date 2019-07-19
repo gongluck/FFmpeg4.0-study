@@ -49,7 +49,7 @@ int CDecode::set_codeid(AVCodecID id)
         codec_ = avcodec_find_decoder(id);
         if (codec_ == nullptr)
         {
-            ret = EINVAL;
+            ret = AVERROR(EINVAL);
             break;
         }
         codectx_ = avcodec_alloc_context3(codec_);
@@ -61,7 +61,7 @@ int CDecode::set_codeid(AVCodecID id)
         par_ = av_parser_init(codec_->id);
         if (par_ == nullptr)
         {
-            ret = EINVAL;
+            ret = AVERROR(EINVAL);
             //break;
         }
 
@@ -73,7 +73,7 @@ int CDecode::set_codeid(AVCodecID id)
                 const AVCodecHWConfig* config = avcodec_get_hw_config(codec_, i);
                 if (config == nullptr)
                 {
-                    ret = EINVAL;
+                    ret = AVERROR(EINVAL);
                     break;
                 }
                 if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
@@ -130,7 +130,7 @@ int CDecode::codec_open()
 
     if (codectx_ == nullptr || codec_ == nullptr)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     int ret = avcodec_open2(codectx_, codec_, nullptr);
     CHECKFFRET(ret);
@@ -145,7 +145,7 @@ int CDecode::decode(const AVPacket* packet)
 
     if (packet == nullptr || codectx_ == nullptr)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     
     // 发送将要解码的数据
@@ -215,7 +215,7 @@ int CDecode::decode(const void* data, uint32_t size)
 
     if (par_ == nullptr || codectx_ == nullptr)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     int pos = 0;
@@ -229,7 +229,7 @@ int CDecode::decode(const void* data, uint32_t size)
         if (pkt_.size > 0)
         {
             ret = decode(&pkt_);
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR(AVERROR_EOF))
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             {
                 av_usleep(10);
                 continue;

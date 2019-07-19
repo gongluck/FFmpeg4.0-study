@@ -48,12 +48,12 @@ if (!this->mutex_.try_lock())\
 #define CHECKSTOP() \
 if(this->status_ != STOP)\
 {\
-    return EINVAL;\
+    return AVERROR(EINVAL);\
 }
 #define CHECKNOTSTOP() \
 if(this->status_ == STOP)\
 {\
-    return EINVAL;\
+    return AVERROR(EINVAL);\
 }
 
 // 检查ffmpeg返回值

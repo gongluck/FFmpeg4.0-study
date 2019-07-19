@@ -25,7 +25,7 @@ int COutput::set_output(const std::string& output)
 
     if (output.empty())
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     else
     {
@@ -41,7 +41,7 @@ int COutput::add_stream(AVCodecID id, int& index)
 
     if (output_.empty())
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     if (fmt_ == nullptr)
     {
@@ -52,7 +52,7 @@ int COutput::add_stream(AVCodecID id, int& index)
     AVCodec* codec = avcodec_find_encoder(id);
     if (codec == nullptr)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     AVStream* stream = avformat_new_stream(fmt_, codec);
@@ -80,7 +80,7 @@ int COutput::copy_param(unsigned int index, const AVCodecParameters* par)
     
     if (fmt_ == nullptr || fmt_->nb_streams <= index)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     return avcodec_parameters_copy(fmt_->streams[index]->codecpar, par);
@@ -93,7 +93,7 @@ int COutput::copy_param(unsigned int index, const AVCodecContext* codectx)
     
     if (fmt_ == nullptr || fmt_->nb_streams <= index)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     
     return avcodec_parameters_from_context(fmt_->streams[index]->codecpar, codectx);
@@ -106,7 +106,7 @@ int COutput::open()
 
     if (fmt_ == nullptr || output_.empty())
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     int ret = avio_open2(&fmt_->pb, output_.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr);
@@ -128,7 +128,7 @@ int COutput::write_frame(AVPacket* packet)
 
     if (fmt_ == nullptr)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     return av_interleaved_write_frame(fmt_, packet);
 }

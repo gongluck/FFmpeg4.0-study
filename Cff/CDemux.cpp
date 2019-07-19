@@ -26,7 +26,7 @@ int CDemux::set_input(const std::string& input)
 
     if (input.empty())
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     else
     {
@@ -40,7 +40,7 @@ int CDemux::get_input(std::string& input)
     LOCK();
     if (input_.empty())
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     else
     {
@@ -133,7 +133,7 @@ int CDemux::demuxthread()
     {
         if (fmtctx_ == nullptr)
         {
-            ret = EINVAL;
+            ret = AVERROR(EINVAL);
             break;
         }
         else if (packet == nullptr)
@@ -252,7 +252,7 @@ int CDemux::get_steam_index(AVMediaType type, int& index)
     if (fmtctx_ == nullptr)
     {
         UNLOCK();
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     int ret = av_find_best_stream(fmtctx_, type, -1, -1, nullptr, 0);
@@ -275,7 +275,7 @@ int CDemux::get_stream_par(int index, const AVCodecParameters*& par)
     if (index < 0 || static_cast<unsigned int>(index) >= fmtctx_->nb_streams)
     {
         UNLOCK();
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     else
     {
@@ -313,7 +313,7 @@ int CDemux::set_input_format(const std::string& fmt)
 
     if (fmt.empty())
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     else
     {
@@ -334,7 +334,7 @@ int CDemux::set_dic_opt(const std::string& key, const std::string& value)
 
     if (key.empty() || value.empty())
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     return av_dict_set(&dic_, key.c_str(), value.c_str(), 0);
@@ -359,7 +359,7 @@ int CDemux::set_bsf_name(unsigned int index, const std::string& bsf)
 
     if (bsf.empty())
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     bsfs_[index] = bsf;

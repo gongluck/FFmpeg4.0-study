@@ -38,7 +38,7 @@ int CEncode::set_encodeid(AVCodecID id)
     codec_ = avcodec_find_encoder(id);
     if (codec_ == nullptr)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
     codectx_ = avcodec_alloc_context3(codec_);
     if (codectx_ == nullptr)
@@ -55,7 +55,7 @@ int CEncode::set_video_param(int64_t bitrate, int width, int height, AVRational 
 
     if (codectx_ == nullptr || codec_ == nullptr)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     codectx_->bit_rate = bitrate;
@@ -77,7 +77,7 @@ int CEncode::set_audio_param(int64_t bitrate, int samplerate, uint64_t channella
 
     if (codectx_ == nullptr || codec_ == nullptr)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     codectx_->bit_rate = bitrate;
@@ -107,7 +107,7 @@ int CEncode::encode(const AVFrame* frame)
 
     if (codectx_ == nullptr)
     {
-        return EINVAL;
+        return AVERROR(EINVAL);
     }
 
     ret = avcodec_send_frame(codectx_, frame);
