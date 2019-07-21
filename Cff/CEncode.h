@@ -63,7 +63,7 @@ private:
     //ffmpeg
     AVCodecContext* codectx_ = nullptr;
     AVCodec* codec_ = nullptr;
-    AVPacket pkt_;
+    AVPacket pkt_ = { 0 };
 };
 
 #endif//__CENCODE_H__

@@ -67,7 +67,7 @@ private:
     AVCodecParserContext* par_ = nullptr;
     AVHWDeviceType hwtype_ = AV_HWDEVICE_TYPE_NONE;
     AVPixelFormat hwfmt_ = AV_PIX_FMT_NONE;
-    AVPacket pkt_;
+    AVPacket pkt_ = { 0 };
     bool trans_ = false;
 };
 

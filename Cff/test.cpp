@@ -801,7 +801,11 @@ void test_encode_h264()
     int ret = 0;
     // out.yuv这个文件太大了，没有上传github，可以用解码的例子生成
     std::ifstream yuv("out.yuv", std::ios::binary);
-    char buf[414720] = { 0 };
+    char* buf = static_cast<char*>(malloc(414720));
+    if (buf == nullptr)
+    {
+        return;
+    }
     CEncode encode;
 
     ret = encode.set_enc_callback(EncVideoFrameCB, nullptr);
@@ -836,6 +840,9 @@ void test_encode_h264()
 
     ret = encode.close();
     TESTCHECKRET(ret);
+
+    free(buf);
+    buf = nullptr;
 }
 
 // 编码mp3
@@ -864,7 +871,7 @@ void test_encode_mp3()
 
     while (!pcm.eof())
     {
-        pcm.read(buf, framesize * size * av_get_channel_layout_nb_channels(frame->channel_layout));
+        pcm.read(buf, static_cast<std::streamsize>(framesize) * size * av_get_channel_layout_nb_channels(frame->channel_layout));
         av_frame_make_writable(frame);
 
         for (int i = 0; i < frame->nb_samples; ++i)
