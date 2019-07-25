@@ -34,9 +34,9 @@ int g_aindex_output = -1;
 int g_framesize = 1024;
 
 #define TESTCHECKRET(ret)\
-if(ret < 0)\
+if(ret < 0 && ret != AVERROR(EAGAIN))\
 {\
-    std::cerr << av_err2str(ret) << std::endl;\
+    std::cerr << av_err2str(ret) << " in " << __FILE__ << " in " << __LINE__ << std::endl;\
 }
 
 void DemuxStatusCB(CDemux::STATUS status, int err, void* param)
@@ -107,7 +107,7 @@ void DemuxDesktopCB(const AVPacket* packet, AVRational timebase, void* param)
     if (decode != nullptr)
     {
         auto ret = decode->decode(packet);
-        //TESTCHECKRET(ret);
+        TESTCHECKRET(ret);
     }
 }
 
@@ -122,7 +122,7 @@ void DemuxSystemSoundCB(const AVPacket* packet, AVRational timebase, void* param
     if (decode != nullptr)
     {
         auto ret = decode->decode(packet);
-        //TESTCHECKRET(ret);
+        TESTCHECKRET(ret);
     }
 }
 
@@ -168,13 +168,13 @@ void DecVideoFrameCB(const AVFrame* frame, void* param)
             f.pkt_dts = f.pts;
             //TESTCHECKRET(enc->encode(&f)); //ERROR!
             auto ret = enc->encode(&f);
-            //TESTCHECKRET(ret);
+            TESTCHECKRET(ret);
             return;
         }
         else
         {
             auto ret = enc->encode(frame);
-            //TESTCHECKRET(ret);
+            TESTCHECKRET(ret);
             return;
         }
     }
