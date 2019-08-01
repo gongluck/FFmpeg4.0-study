@@ -15,6 +15,7 @@
 
 CFilter::~CFilter()
 {
+    clear_filter();
 }
 
 int CFilter::set_filter_callback(FilterCallback cb, void* param)
@@ -30,6 +31,11 @@ int CFilter::set_filter_callback(FilterCallback cb, void* param)
 int CFilter::init_filter(const std::string& args, const std::string& filters_descr, AVPixelFormat pix_fmts[])
 {
     LOCK();
+
+    if (args.empty() && filters_descr.empty())
+    {
+        return AVERROR(EINVAL);
+    }
 
     int ret = clear_filter();
     CHECKFFRET(ret);
@@ -82,6 +88,11 @@ int CFilter::add_frame(AVFrame* frame)
 {
     LOCK();
 
+    if (buffersrc_ctx_ == nullptr && buffersink_ctx_ == nullptr)
+    {
+        return AVERROR(EINVAL);
+    }
+
     int ret = av_buffersrc_add_frame_flags(buffersrc_ctx_, frame, AV_BUFFERSRC_FLAG_KEEP_REF);
     CHECKFFRET(ret);
 
@@ -105,8 +116,11 @@ int CFilter::clear_filter()
 
     avfilter_inout_free(&inputs_);
     avfilter_inout_free(&outputs_);
+    avfilter_graph_free(&filter_graph_);
     buffersrc_ = nullptr;
     buffersink_ = nullptr;
+    buffersrc_ctx_ = nullptr;
+    buffersink_ctx_ = nullptr;
 
     return 0;
 }

@@ -1201,7 +1201,7 @@ void test_filter()
     ret = filter.set_filter_callback(FilterCB, nullptr);
     TESTCHECKRET(ret);
     AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
-    ret = filter.init_filter("video_size=640x432:pix_fmt=0:time_base=1/1000000:pixel_aspect=0/1", "scale=800:400", pix_fmts);
+    ret = filter.init_filter("video_size=640x432:pix_fmt=0:time_base=1/1000000:pixel_aspect=0/1", "drawtext=fontsize=20:text=gongluck:x=50:y=100", pix_fmts);
     TESTCHECKRET(ret);
 
     // 分配图像数据内存
