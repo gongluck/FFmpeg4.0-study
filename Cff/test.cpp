@@ -16,12 +16,12 @@
 #include "CSwr.h"
 #include "COutput.h"
 #include "CEncode.h"
+#include "CFilter.h"
 #include <iostream>
 #include <fstream>
 extern "C"
 {
 #include <libavutil/audio_fifo.h>
-#include <libavutil/time.h>
 }
 
 
@@ -345,6 +345,28 @@ void EncAudioFrameCB(const AVPacket * packet, void* param)
     {
         static std::ofstream aac("encode.mp3", std::ios::binary);
         aac.write(reinterpret_cast<char*>(packet->data), packet->size);
+    }
+}
+
+void FilterCB(const AVFrame* frame, void* param)
+{
+    if (frame->format == AV_PIX_FMT_YUV420P)
+    {
+        std::cout << "got a yuv420p " << frame->width << "x" << frame->height << std::endl;
+        std::cout << "lineseize " << frame->linesize[0] << std::endl;
+        static std::ofstream video("filter.yuv", std::ios::binary | std::ios::trunc);
+        uint8_t* pt[4] = { 0 };
+        int lz[4] = { 0 };
+        // 申请保存解码帧的内存
+        int s = av_image_alloc(pt, lz, frame->width, frame->height, static_cast<AVPixelFormat>(frame->format), 1);
+        av_image_copy(pt, lz,
+            (const uint8_t * *)frame->data, frame->linesize,
+            static_cast<AVPixelFormat>(frame->format), frame->width, frame->height);
+        video.write(reinterpret_cast<const char*>(pt[0]), s);
+        //video.write(reinterpret_cast<const char*>(frame->data[0]), static_cast<long long>(frame->linesize[0]) * frame->height);
+        //video.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
+        //video.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
+        av_freep(&pt[0]);
     }
 }
 
@@ -1169,6 +1191,48 @@ void test_capture_record()
     TESTCHECKRET(ret);
 }
 
+// 过滤器
+void test_filter()
+{
+    int ret = 0;
+    CFilter filter;
+    std::ifstream yuv("in.yuv", std::ios::binary);
+
+    ret = filter.set_filter_callback(FilterCB, nullptr);
+    TESTCHECKRET(ret);
+    AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
+    ret = filter.init_filter("video_size=640x432:pix_fmt=0:time_base=1/1000000:pixel_aspect=0/1", "scale=800:400", pix_fmts);
+    TESTCHECKRET(ret);
+
+    // 分配图像数据内存
+    uint8_t* src[4] = { 0 };
+    int linesize[4] = { 0 };
+    int srcsize = av_image_alloc(src, linesize, 640, 432, AV_PIX_FMT_YUV420P, 1);
+    yuv.read(reinterpret_cast<char*>(src[0]), 640 * 432);
+    yuv.read(reinterpret_cast<char*>(src[1]), 640 * 432 / 4);
+    yuv.read(reinterpret_cast<char*>(src[2]), 640 * 432 / 4);
+
+    AVFrame frame = { 0 };
+    frame.format = AV_PIX_FMT_YUV420P;
+    frame.data[0] = src[0];
+    frame.data[1] = src[1];
+    frame.data[2] = src[2];
+    frame.linesize[0] = linesize[0];
+    frame.linesize[1] = linesize[1];
+    frame.linesize[2] = linesize[2];
+    frame.width = 640;
+    frame.height = 432;
+    ret = filter.add_frame(&frame);
+    TESTCHECKRET(ret);
+
+    // 清理
+    if (src != nullptr)
+    {
+        av_freep(&src[0]);
+    }
+    av_freep(&src);
+}
+
 int main()
 {
     //av_log_set_level(AV_LOG_MAX_OFFSET);
@@ -1187,6 +1251,7 @@ int main()
     //test_encode_mp3();
     //test_screen_capture();
     //test_record();
-    test_capture_record();
+    //test_capture_record();
+    test_filter();
     return 0;
 }

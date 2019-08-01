@@ -36,6 +36,9 @@
     <ClCompile Include="Cff\CEncode.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Cff\CFilter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Cff\CDecode.h">
@@ -57,6 +60,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Cff\CEncode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Cff\CFilter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -6,6 +6,7 @@ save.*
 record.*
 capture.*
 test.*
+filter.*
 *.exe
 *.db
 *.ipch

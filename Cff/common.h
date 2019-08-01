@@ -20,6 +20,7 @@ extern "C"
 
 #include <libavutil/error.h>
 #include <libavutil/time.h>
+#include <libavutil/opt.h>
 
 #ifdef __cplusplus
 }
