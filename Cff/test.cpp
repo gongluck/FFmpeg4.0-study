@@ -273,7 +273,7 @@ void DecAudioFrameCB(const AVFrame * frame, void* param)
                 ff.pkt_pos = -1;
                 lastpts = pts;
                 auto ret = enc->encode(&ff);
-                //TESTCHECKRET(ret);
+                TESTCHECKRET(ret);
             }
             return;
         }

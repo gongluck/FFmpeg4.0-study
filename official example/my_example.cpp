@@ -66,7 +66,7 @@ int read_packet(void *opaque, uint8_t *buf, int buf_size)
     return buf_size;
 }
 
-int main(int argc, char* argv[])
+int main_my_example(int argc, char* argv[])
 {
     // DECODE
     AVFormatContext* fmt_ctx = nullptr;
