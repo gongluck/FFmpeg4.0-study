@@ -81,7 +81,7 @@ int CDemux::openinput()
     fmtctx_ = avformat_alloc_context();
     if (fmtctx_ == nullptr)
     {
-        return AVERROR_BUG;
+        return AVERROR(ENOMEM);
     }
     ret = avformat_open_input(&fmtctx_, input_.c_str(), fmt_, &dic_);
     CHECKFFRET(ret);
@@ -138,7 +138,7 @@ int CDemux::demuxthread()
         }
         else if (packet == nullptr)
         {
-            ret = AVERROR_BUG;
+            ret = AVERROR(ENOMEM);
             break;
         }
         // 初始化packet

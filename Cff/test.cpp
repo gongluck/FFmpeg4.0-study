@@ -357,7 +357,7 @@ void FilterCB(const AVFrame* frame, void* param)
         static std::ofstream video("filter.yuv", std::ios::binary | std::ios::trunc);
         uint8_t* pt[4] = { 0 };
         int lz[4] = { 0 };
-        // 申请保存解码帧的内存
+        // 申请内存
         int s = av_image_alloc(pt, lz, frame->width, frame->height, static_cast<AVPixelFormat>(frame->format), 1);
         av_image_copy(pt, lz,
             (const uint8_t * *)frame->data, frame->linesize,

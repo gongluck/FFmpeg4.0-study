@@ -43,7 +43,7 @@ int CEncode::set_encodeid(AVCodecID id)
     codectx_ = avcodec_alloc_context3(codec_);
     if (codectx_ == nullptr)
     {
-        return AVERROR_BUG;
+        return AVERROR(ENOMEM);
     }
 
     return 0;

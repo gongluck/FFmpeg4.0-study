@@ -55,7 +55,7 @@ int CDecode::set_codeid(AVCodecID id)
         codectx_ = avcodec_alloc_context3(codec_);
         if (codectx_ == nullptr)
         {
-            ret = AVERROR_BUG;
+            ret = AVERROR(ENOMEM);
             break;
         }
         par_ = av_parser_init(codec_->id);
@@ -159,7 +159,7 @@ int CDecode::decode(const AVPacket* packet)
     {
         av_frame_free(&frame);
         av_frame_free(&traframe);
-        return AVERROR_BUG;
+        return AVERROR(ENOMEM);
     }
 
     while (ret >= 0)

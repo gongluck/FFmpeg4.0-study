@@ -58,7 +58,7 @@ int COutput::add_stream(AVCodecID id, int& index)
     AVStream* stream = avformat_new_stream(fmt_, codec);
     if (stream == nullptr)
     {
-        return AVERROR_BUG;
+        return AVERROR(ENOMEM);
     }
     index = stream->index;
     return 0;
