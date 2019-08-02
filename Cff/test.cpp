@@ -348,7 +348,7 @@ void EncAudioFrameCB(const AVPacket * packet, void* param)
     }
 }
 
-void FilterCB(const AVFrame* frame, void* param)
+void FilterVideoCB(const AVFrame* frame, void* param)
 {
     if (frame->format == AV_PIX_FMT_YUV420P)
     {
@@ -367,6 +367,17 @@ void FilterCB(const AVFrame* frame, void* param)
         //video.write(reinterpret_cast<const char*>(frame->data[1]), frame->linesize[1] * frame->height / 2);
         //video.write(reinterpret_cast<const char*>(frame->data[2]), frame->linesize[2] * frame->height / 2);
         av_freep(&pt[0]);
+    }
+}
+
+void FilterAudioCB(const AVFrame* frame, void* param)
+{
+    if (frame->format == AV_SAMPLE_FMT_DBL)
+    {
+        auto size = av_samples_get_buffer_size(nullptr, frame->channels, frame->nb_samples, static_cast<AVSampleFormat>(frame->format), 1);
+        std::cout << "got a dbl " << frame->linesize[0] << " : " << size << std::endl;
+        static std::ofstream audio("filter.pcm", std::ios::binary | std::ios::trunc);
+        audio.write(reinterpret_cast<const char*>(frame->data[0]), size);
     }
 }
 
@@ -611,8 +622,6 @@ void test_desktop()
 
     ret = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
     std::cout << "g_vindex : " << g_vindex << std::endl;
-    ret = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
-    std::cout << "g_aindex : " << g_aindex << std::endl;
 
     ret = decode.set_dec_callback(DecVideoFrameCB, nullptr);
     TESTCHECKRET(ret);
@@ -657,8 +666,6 @@ void test_systemsound()
     ret = demux.openinput();
     TESTCHECKRET(ret);
 
-    ret = demux.get_steam_index(AVMEDIA_TYPE_VIDEO, g_vindex);
-    std::cout << "g_vindex : " << g_vindex << std::endl;
     ret = demux.get_steam_index(AVMEDIA_TYPE_AUDIO, g_aindex);
     std::cout << "g_aindex : " << g_aindex << std::endl;
 
@@ -1191,17 +1198,17 @@ void test_capture_record()
     TESTCHECKRET(ret);
 }
 
-// 过滤器
-void test_filter()
+// 视频过滤器
+void test_video_filter()
 {
     int ret = 0;
     CFilter filter;
     std::ifstream yuv("in.yuv", std::ios::binary);
 
-    ret = filter.set_filter_callback(FilterCB, nullptr);
+    ret = filter.set_filter_callback(FilterVideoCB, nullptr);
     TESTCHECKRET(ret);
     AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
-    ret = filter.init_filter("video_size=640x432:pix_fmt=0:time_base=1/1000000:pixel_aspect=0/1", "drawtext=fontsize=20:text=gongluck:x=50:y=100", pix_fmts);
+    ret = filter.init_video_filter("video_size=640x432:pix_fmt=0:time_base=1/1000000:pixel_aspect=0/1", "drawtext=fontsize=20:text=gongluck:x=50:y=100", pix_fmts);
     TESTCHECKRET(ret);
 
     // 分配图像数据内存
@@ -1233,10 +1240,57 @@ void test_filter()
     av_freep(&src);
 }
 
+// 音频过滤器
+void test_audio_filter()
+{
+    int ret = 0;
+    CFilter filter;
+    std::ifstream pcm("in.pcm", std::ios::binary);
+
+    ret = filter.set_filter_callback(FilterAudioCB, nullptr);
+    TESTCHECKRET(ret);
+    const enum AVSampleFormat fmts[] = { AV_SAMPLE_FMT_DBL, AV_SAMPLE_FMT_NONE };
+    const int64_t layouts[] = { AV_CH_LAYOUT_MONO, -1 };
+    const int rates[] = { 48000, -1 };
+    ret = filter.init_audio_filter("time_base=1/44100:sample_rate=44100:sample_fmt=s16:channel_layout=0x3", "aresample=48000,aformat=sample_fmts=dbl:channel_layouts=mono", 
+        fmts, layouts, rates);
+    TESTCHECKRET(ret);
+
+    // 分配音频数据内存
+    uint8_t** src = nullptr;
+    int srclinesize = 0;
+
+    // 分配音频数据内存
+    int srcsize = av_samples_alloc_array_and_samples(&src, &srclinesize, 2, 44100, AV_SAMPLE_FMT_S16, 1);
+
+    while (!pcm.eof())
+    {
+        pcm.read(reinterpret_cast<char*>(src[0]), srcsize);
+        AVFrame frame = { 0 };
+        frame.format = AV_SAMPLE_FMT_S16;
+        frame.data[0] = src[0];
+        frame.linesize[0] = srclinesize;
+        frame.sample_rate = 44100;
+        frame.nb_samples = 44100;
+        frame.channel_layout = AV_CH_LAYOUT_STEREO;
+        frame.channels = 2;
+        frame.extended_data = frame.data;
+        ret = filter.add_frame(&frame);
+        TESTCHECKRET(ret);
+    }
+
+    // 清理
+    if (src != nullptr)
+    {
+        av_freep(&src[0]);
+    }
+    av_freep(&src);
+}
+
 int main()
 {
-    //av_log_set_level(AV_LOG_MAX_OFFSET);
-    //test_demux();
+    av_log_set_level(AV_LOG_INFO);
+    test_demux();
     //test_decode_h264();
     //test_decode_aac();
     //test_decode_mp3();
@@ -1252,6 +1306,7 @@ int main()
     //test_screen_capture();
     //test_record();
     //test_capture_record();
-    test_filter();
+    //test_video_filter();
+    //test_audio_filter();
     return 0;
 }

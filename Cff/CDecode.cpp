@@ -50,12 +50,14 @@ int CDecode::set_codeid(AVCodecID id)
         if (codec_ == nullptr)
         {
             ret = AVERROR(EINVAL);
+            av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
             break;
         }
         codectx_ = avcodec_alloc_context3(codec_);
         if (codectx_ == nullptr)
         {
             ret = AVERROR(ENOMEM);
+            av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
             break;
         }
         par_ = av_parser_init(codec_->id);
@@ -63,6 +65,7 @@ int CDecode::set_codeid(AVCodecID id)
         {
             ret = 0;
             //ret = AVERROR(EINVAL);
+            av_log(nullptr, AV_LOG_WARNING, "%s %d : %ld\n", __FILE__, __LINE__, AVERROR(EINVAL));
             //break;
         }
 
@@ -75,6 +78,7 @@ int CDecode::set_codeid(AVCodecID id)
                 if (config == nullptr)
                 {
                     ret = AVERROR(EINVAL);
+                    av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
                     break;
                 }
                 if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
@@ -85,6 +89,7 @@ int CDecode::set_codeid(AVCodecID id)
                     ret = av_hwdevice_ctx_create(&hwbufref, hwtype_, nullptr, nullptr, 0);
                     if (ret < 0)
                     {
+                        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
                         break;
                     }
                     else
@@ -93,6 +98,7 @@ int CDecode::set_codeid(AVCodecID id)
                         if (codectx_->hw_device_ctx == nullptr)
                         {
                             ret = AVERROR_BUG;
+                            av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
                             break;
                         }
                         av_buffer_unref(&hwbufref);
@@ -128,15 +134,18 @@ int CDecode::copy_param(const AVCodecParameters* par)
 int CDecode::codec_open()
 {
     LOCK();
+    int ret = 0;
 
     if (codectx_ == nullptr || codec_ == nullptr)
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
-    int ret = avcodec_open2(codectx_, codec_, nullptr);
+    ret = avcodec_open2(codectx_, codec_, nullptr);
     CHECKFFRET(ret);
 
-    return 0;
+    return ret;
 }
 
 int CDecode::decode(const AVPacket* packet)
@@ -146,7 +155,9 @@ int CDecode::decode(const AVPacket* packet)
 
     if (packet == nullptr || codectx_ == nullptr)
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
     
     // 发送将要解码的数据
@@ -159,7 +170,9 @@ int CDecode::decode(const AVPacket* packet)
     {
         av_frame_free(&frame);
         av_frame_free(&traframe);
-        return AVERROR(ENOMEM);
+        ret = AVERROR(ENOMEM);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
     while (ret >= 0)
@@ -170,6 +183,7 @@ int CDecode::decode(const AVPacket* packet)
         {
             // 不完整或者EOF
             // 其他错误
+            av_log(nullptr, AV_LOG_DEBUG, "%s %d : %ld\n", __FILE__, __LINE__, ret);
             break;
         }
         else
@@ -185,6 +199,7 @@ int CDecode::decode(const AVPacket* packet)
                     ret = av_hwframe_transfer_data(traframe, frame, 0);
                     if (ret < 0)
                     {
+                        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
                         break;
                     }
                     else
@@ -216,7 +231,9 @@ int CDecode::decode(const void* data, uint32_t size)
 
     if (par_ == nullptr || codectx_ == nullptr)
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
     int pos = 0;
@@ -232,6 +249,7 @@ int CDecode::decode(const void* data, uint32_t size)
             ret = decode(&pkt_);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             {
+                av_log(nullptr, AV_LOG_DEBUG, "%s %d : %ld\n", __FILE__, __LINE__, ret);
                 av_usleep(10);
                 continue;
             }

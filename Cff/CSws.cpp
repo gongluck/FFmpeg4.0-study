@@ -46,15 +46,20 @@ int CSws::lock_opt()
 {
     LOCK();
     CHECKSTOP();
+    int ret = 0;
 
     swsctx_ = sws_getContext(src_w_, src_h_, src_pix_fmt_, dst_w_, dst_h_, dst_pix_fmt_, SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
     if (swsctx_ == nullptr)
     {
-        return AVERROR_BUG2;
+        ret = AVERROR_BUG2;
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
     }
-    status_ = LOCKED;
+    else
+    {
+        status_ = LOCKED;
+    }
 
-    return 0;
+    return ret;
 }
 
 int CSws::unlock_opt()

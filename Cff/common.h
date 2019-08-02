@@ -38,6 +38,7 @@ static char av_error[AV_ERROR_MAX_STRING_SIZE] = { 0 };
 #define TRYLOCK()\
 if (!this->mutex_.try_lock())\
 {\
+    av_log(nullptr, AV_LOG_WARNING, "%s %d : %ld\n", __FILE__, __LINE__, EBUSY);\
     return EBUSY;\
 }
 #define UNLOCK()\
@@ -49,11 +50,13 @@ if (!this->mutex_.try_lock())\
 #define CHECKSTOP() \
 if(this->status_ != STOP)\
 {\
+    av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, AVERROR(EINVAL));\
     return AVERROR(EINVAL);\
 }
 #define CHECKNOTSTOP() \
 if(this->status_ == STOP)\
 {\
+    av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, AVERROR(EINVAL));\
     return AVERROR(EINVAL);\
 }
 
@@ -61,6 +64,7 @@ if(this->status_ == STOP)\
 #define CHECKFFRET(ret) \
 if (ret < 0)\
 {\
+    av_log(nullptr, ret != AVERROR(EAGAIN) ? (ret != AVERROR_EOF ? AV_LOG_ERROR : AV_LOG_INFO) : AV_LOG_DEBUG, "%s %d : %ld\n", __FILE__, __LINE__, ret);\
     return ret;\
 }
 

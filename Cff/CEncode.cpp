@@ -38,24 +38,29 @@ int CEncode::set_encodeid(AVCodecID id)
     codec_ = avcodec_find_encoder(id);
     if (codec_ == nullptr)
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
     codectx_ = avcodec_alloc_context3(codec_);
     if (codectx_ == nullptr)
     {
-        return AVERROR(ENOMEM);
+        ret = AVERROR(ENOMEM);
     }
 
-    return 0;
+    return ret;
 }
 
 int CEncode::set_video_param(int64_t bitrate, int width, int height, AVRational timebase, AVRational framerate, int gop, int maxbframes, AVPixelFormat fmt)
 {
     LOCK();
+    int ret = 0;
 
     if (codectx_ == nullptr || codec_ == nullptr)
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
     codectx_->bit_rate = bitrate;
@@ -74,10 +79,13 @@ int CEncode::set_video_param(int64_t bitrate, int width, int height, AVRational 
 int CEncode::set_audio_param(int64_t bitrate, int samplerate, uint64_t channellayout, int channels, AVSampleFormat fmt, int& framesize)
 {
     LOCK();
+    int ret = 0;
 
     if (codectx_ == nullptr || codec_ == nullptr)
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
     codectx_->bit_rate = bitrate;
@@ -87,11 +95,11 @@ int CEncode::set_audio_param(int64_t bitrate, int samplerate, uint64_t channella
     codectx_->sample_fmt = fmt;
     codectx_->codec_type = AVMEDIA_TYPE_AUDIO;
 
-    int ret = avcodec_open2(codectx_, codec_, nullptr);
+    ret = avcodec_open2(codectx_, codec_, nullptr);
     CHECKFFRET(ret);
     framesize = codectx_->frame_size;
 
-    return 0;
+    return ret;
 }
 
 int CEncode::get_codectx(const AVCodecContext*& codectx)
@@ -107,7 +115,9 @@ int CEncode::encode(const AVFrame* frame)
 
     if (codectx_ == nullptr)
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
     ret = avcodec_send_frame(codectx_, frame);
@@ -138,5 +148,5 @@ int CEncode::close()
     }
     avcodec_free_context(&codectx_);
 
-    return true;
+    return 0;
 }

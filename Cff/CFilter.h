@@ -41,7 +41,8 @@ public:
     int set_filter_callback(FilterCallback cb, void* param);
 
     // 设置过滤器
-    int init_filter(const std::string& args, const std::string& filters_descr, AVPixelFormat pix_fmts[]);
+    int init_video_filter(const std::string& args, const std::string& filters_descr, const AVPixelFormat pix_fmts[]);
+    int init_audio_filter(const std::string& args, const std::string& filters_descr, const enum AVSampleFormat sample_fmts[], const int64_t layouts[], const int rates[]);
 
     // 输入一帧
     int add_frame(AVFrame* frame);

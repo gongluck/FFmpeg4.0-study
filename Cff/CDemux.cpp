@@ -23,10 +23,13 @@ int CDemux::set_input(const std::string& input)
 {
     LOCK();
     CHECKSTOP();
+    int ret = 0;
 
     if (input.empty())
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
     else
     {
@@ -38,15 +41,19 @@ int CDemux::set_input(const std::string& input)
 int CDemux::get_input(std::string& input)
 {
     LOCK();
+    int ret = 0;
+
     if (input_.empty())
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
     }
     else
     {
         input.assign(input_);
-        return 0;
     }
+
+    return ret;
 }
 
 int CDemux::set_demux_callback(DemuxPacketCallback cb, void* param)
@@ -81,7 +88,9 @@ int CDemux::openinput()
     fmtctx_ = avformat_alloc_context();
     if (fmtctx_ == nullptr)
     {
-        return AVERROR(ENOMEM);
+        ret = AVERROR(ENOMEM);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
     ret = avformat_open_input(&fmtctx_, input_.c_str(), fmt_, &dic_);
     CHECKFFRET(ret);
@@ -91,7 +100,7 @@ int CDemux::openinput()
 
     av_dump_format(fmtctx_, 0, input_.c_str(), 0);
 
-    return 0;
+    return ret;
 }
 
 int CDemux::begindemux()
@@ -134,11 +143,13 @@ int CDemux::demuxthread()
         if (fmtctx_ == nullptr)
         {
             ret = AVERROR(EINVAL);
+            av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
             break;
         }
         else if (packet == nullptr)
         {
             ret = AVERROR(ENOMEM);
+            av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
             break;
         }
         // 初始化packet
@@ -174,6 +185,7 @@ int CDemux::demuxthread()
             if (status_ != DEMUXING)
             {
                 ret = AVERROR_EOF;
+                av_log(nullptr, AV_LOG_INFO, "%s %d : %ld\n", __FILE__, __LINE__, ret);
                 break;
             }
 
@@ -181,6 +193,7 @@ int CDemux::demuxthread()
             ret = av_read_frame(fmtctx_, packet);
             if (ret < 0)
             {
+                av_log(nullptr, ret == AVERROR_EOF ? AV_LOG_INFO : AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
                 break; //这里认为视频读取完了
             }
             else if (demuxpacketcb_ != nullptr)
@@ -191,6 +204,7 @@ int CDemux::demuxthread()
                     ret = av_bsf_send_packet(bsfctx, packet);
                     if (ret < 0)
                     {
+                        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
                         break;
                     }
                     while (ret >= 0)
@@ -199,6 +213,7 @@ int CDemux::demuxthread()
                         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
                         {
                             // 不完整或者EOF
+                            av_log(nullptr, AV_LOG_DEBUG, "%s %d : %ld\n", __FILE__, __LINE__, ret);
                             av_usleep(10);
                             break;
                         }
@@ -249,33 +264,40 @@ int CDemux::demuxthread()
 int CDemux::get_steam_index(AVMediaType type, int& index)
 {
     TRYLOCK();
+    int ret = 0;
+
     if (fmtctx_ == nullptr)
     {
         UNLOCK();
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
-    int ret = av_find_best_stream(fmtctx_, type, -1, -1, nullptr, 0);
+    ret = av_find_best_stream(fmtctx_, type, -1, -1, nullptr, 0);
     UNLOCK();
     if (ret >= 0)
     {
         index = ret;
-        return 0;
     }
     else
     {
-        return ret;
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
     }
+
+    return ret;
 } 
 
 int CDemux::get_stream_par(int index, const AVCodecParameters*& par)
 {
     TRYLOCK();
+    int ret = 0;
 
     if (index < 0 || static_cast<unsigned int>(index) >= fmtctx_->nb_streams)
     {
         UNLOCK();
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
     }
     else
     {
@@ -283,7 +305,7 @@ int CDemux::get_stream_par(int index, const AVCodecParameters*& par)
     }
     UNLOCK();
 
-    return 0;
+    return ret;
 }
 
 int CDemux::seek(int64_t timestamp, int index, int flags)
@@ -310,31 +332,36 @@ int CDemux::set_input_format(const std::string& fmt)
 {
     LOCK();
     CHECKSTOP();
+    int ret = 0;
 
     if (fmt.empty())
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
     }
     else
     {
         fmt_ = av_find_input_format(fmt.c_str());
         if (fmt_ == nullptr)
         {
-            return AVERROR_BUG;
+            ret = AVERROR_BUG;
         }
     }
 
-    return 0;
+    return ret;
 }
 
 int CDemux::set_dic_opt(const std::string& key, const std::string& value)
 {
     LOCK();
     CHECKSTOP();
+    int ret = 0;
 
     if (key.empty() || value.empty())
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
     return av_dict_set(&dic_, key.c_str(), value.c_str(), 0);
@@ -356,13 +383,15 @@ int CDemux::set_bsf_name(unsigned int index, const std::string& bsf)
 {
     LOCK();
     CHECKSTOP();
+    int ret = 0;
 
     if (bsf.empty())
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
     }
 
     bsfs_[index] = bsf;
 
-    return 0;
+    return ret;
 }

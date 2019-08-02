@@ -46,17 +46,24 @@ int CSwr::lock_opt()
 {
     LOCK();
     CHECKSTOP();
+    int ret = 0;
 
     swrctx_ = swr_alloc_set_opts(swrctx_, dst_layout_, dst_sam_fmt_, dst_rate_, src_layout_, src_sam_fmt_, src_rate_, 0, nullptr);
     if (swrctx_ == nullptr)
     {
-        return AVERROR_BUG2;
+        ret = AVERROR_BUG2;
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
-    int ret = swr_init(swrctx_);
-    CHECKFFRET(ret);
+    else
+    {
+        ret = swr_init(swrctx_);
+        CHECKFFRET(ret);
 
-    status_ = LOCKED;
-    return 0;
+        status_ = LOCKED;
+    }
+
+    return ret;
 }
 
 int CSwr::unlock_opt()

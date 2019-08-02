@@ -28,23 +28,28 @@ int CFilter::set_filter_callback(FilterCallback cb, void* param)
     return 0;
 }
 
-int CFilter::init_filter(const std::string& args, const std::string& filters_descr, AVPixelFormat pix_fmts[])
+int CFilter::init_video_filter(const std::string& args, const std::string& filters_descr, const AVPixelFormat pix_fmts[])
 {
     LOCK();
+    int ret = 0;
 
     if (args.empty() && filters_descr.empty())
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
-    int ret = clear_filter();
+    ret = clear_filter();
     CHECKFFRET(ret);
 
     buffersrc_ = avfilter_get_by_name("buffer");
     buffersink_ = avfilter_get_by_name("buffersink");
     if (buffersrc_ == nullptr || buffersink_ == nullptr)
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
     inputs_ = avfilter_inout_alloc();
@@ -53,7 +58,9 @@ int CFilter::init_filter(const std::string& args, const std::string& filters_des
     if (inputs_ == nullptr || outputs_ == nullptr || filter_graph_ == nullptr)
     {
         clear_filter();
-        return AVERROR(ENOMEM);
+        ret = AVERROR(ENOMEM);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
     ret = avfilter_graph_create_filter(&buffersrc_ctx_, buffersrc_, "in", args.c_str(), nullptr, filter_graph_);
@@ -84,16 +91,86 @@ int CFilter::init_filter(const std::string& args, const std::string& filters_des
     return ret;
 }
 
+int CFilter::init_audio_filter(const std::string& args, const std::string& filters_descr, const enum AVSampleFormat sample_fmts[], const int64_t layouts[], const int rates[])
+{
+    LOCK();
+    int ret = 0;
+
+    if (args.empty() && filters_descr.empty())
+    {
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
+    }
+
+    ret = clear_filter();
+    CHECKFFRET(ret);
+
+    buffersrc_ = avfilter_get_by_name("abuffer");
+    buffersink_ = avfilter_get_by_name("abuffersink");
+    if (buffersrc_ == nullptr || buffersink_ == nullptr)
+    {
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
+    }
+
+    inputs_ = avfilter_inout_alloc();
+    outputs_ = avfilter_inout_alloc();
+    filter_graph_ = avfilter_graph_alloc();
+    if (inputs_ == nullptr || outputs_ == nullptr || filter_graph_ == nullptr)
+    {
+        clear_filter();
+        ret = AVERROR(ENOMEM);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
+    }
+
+    ret = avfilter_graph_create_filter(&buffersrc_ctx_, buffersrc_, "in", args.c_str(), nullptr, filter_graph_);
+    CHECKFFRET(ret);
+
+    ret = avfilter_graph_create_filter(&buffersink_ctx_, buffersink_, "out", nullptr, nullptr, filter_graph_);
+    CHECKFFRET(ret);
+
+    ret = av_opt_set_int_list(buffersink_ctx_, "sample_fmts", sample_fmts, AV_SAMPLE_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+    CHECKFFRET(ret);
+    ret = av_opt_set_int_list(buffersink_ctx_, "channel_layouts", layouts, -1, AV_OPT_SEARCH_CHILDREN);
+    CHECKFFRET(ret);
+    ret = av_opt_set_int_list(buffersink_ctx_, "sample_rates", rates, -1, AV_OPT_SEARCH_CHILDREN);
+    CHECKFFRET(ret);
+
+    outputs_->name = av_strdup("in");
+    outputs_->filter_ctx = buffersrc_ctx_;
+    outputs_->pad_idx = 0;
+    outputs_->next = nullptr;
+
+    inputs_->name = av_strdup("out");
+    inputs_->filter_ctx = buffersink_ctx_;
+    inputs_->pad_idx = 0;
+    inputs_->next = nullptr;
+
+    ret = avfilter_graph_parse_ptr(filter_graph_, filters_descr.c_str(), &inputs_, &outputs_, nullptr);
+    CHECKFFRET(ret);
+
+    ret = avfilter_graph_config(filter_graph_, nullptr);
+    CHECKFFRET(ret);
+
+    return ret;
+}
+
 int CFilter::add_frame(AVFrame* frame)
 {
     LOCK();
+    int ret = 0;
 
     if (buffersrc_ctx_ == nullptr && buffersink_ctx_ == nullptr)
     {
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+        return ret;
     }
 
-    int ret = av_buffersrc_add_frame_flags(buffersrc_ctx_, frame, AV_BUFFERSRC_FLAG_KEEP_REF);
+    ret = av_buffersrc_add_frame_flags(buffersrc_ctx_, frame, AV_BUFFERSRC_FLAG_KEEP_REF);
     CHECKFFRET(ret);
 
     while (ret >= 0) 
