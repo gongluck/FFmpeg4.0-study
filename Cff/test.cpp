@@ -1290,7 +1290,7 @@ void test_audio_filter()
 int main()
 {
     av_log_set_level(AV_LOG_INFO);
-    test_demux();
+    //test_demux();
     //test_decode_h264();
     //test_decode_aac();
     //test_decode_mp3();
@@ -1305,7 +1305,7 @@ int main()
     //test_encode_mp3();
     //test_screen_capture();
     //test_record();
-    //test_capture_record();
+    test_capture_record();
     //test_video_filter();
     //test_audio_filter();
     return 0;

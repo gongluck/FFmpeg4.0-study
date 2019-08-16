@@ -60,13 +60,15 @@ int CDecode::set_codeid(AVCodecID id)
             av_log(nullptr, AV_LOG_ERROR, "%s %d : %ld\n", __FILE__, __LINE__, ret);
             break;
         }
-        par_ = av_parser_init(codec_->id);
-        if (par_ == nullptr)
+        if (codec_->id != AV_CODEC_ID_FIRST_AUDIO)
         {
-            ret = 0;
-            //ret = AVERROR(EINVAL);
-            av_log(nullptr, AV_LOG_WARNING, "%s %d : %ld\n", __FILE__, __LINE__, AVERROR(EINVAL));
-            //break;
+            par_ = av_parser_init(codec_->id);
+            if (par_ == nullptr)
+            {
+                ret = AVERROR(EINVAL);
+                av_log(nullptr, AV_LOG_WARNING, "%s %d : %ld\n", __FILE__, __LINE__, ret);
+                break;
+            }
         }
 
         if (hwtype_ != AV_HWDEVICE_TYPE_NONE)
